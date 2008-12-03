@@ -1,1 +1,7 @@
 This is a repository to keep libraries I'm working on for Clojure.
+
+== Template: ==
+
+A library for creating templates to generate HTML pages, email messages,
+configuration files etc.  You can embed Clojure expressions inside tags in a
+document, and then instantiate the template under different bindings.
