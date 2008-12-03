@@ -1,3 +1,20 @@
+;;; template.clj -- A templating system for embedding Clojure in documents.
+
+;; by Jeff Rose <rosejn@gmail.com>
+;; Dec 1, 2008
+
+;; Copyright (c) 2008 Jeff Rose. All rights reserved.  The use and
+;; distribution terms for this software are covered by the Common
+;; Public License 1.0 (http://www.opensource.org/licenses/cpl1.0.php)
+;; which can be found in the file CPL.TXT at the root of this
+;; distribution.  By using this software in any fashion, you are
+;; agreeing to be bound by the terms of this license.  You must not
+;; remove this notice, or any other, from this software.
+
+;; This library defines a template function that given a string generates a
+;; new function which when called instantiates the template and outputs a 
+;; string with the embedded code evaluated under the current bindings.
+
 (ns template
   (:use clojure.contrib.fcase)
   (:import (java.util Scanner)))
