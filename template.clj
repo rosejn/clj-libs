@@ -19,11 +19,12 @@
   (:use clojure.contrib.fcase)
   (:import (java.util Scanner)))
 
-(defn- scanner [input] 
+(defn- scanner
   "Returns a hash of functions closing over a java Scanner object.  
   scan: returns the next regexp match, and moves over the input stream
   more?: a test to see whether more data is available"
-  (let [scanr (new Scanner input)]
+	[input] 
+	(let [scanr (new Scanner input)]
     {:scan (fn [pattern] 
              (if (nil? (.findInLine scanr pattern))
                [(.nextLine scanr) "\n"]
@@ -32,41 +33,46 @@
      :more? (fn [] (.hasNextLine scanr))
      }))
 
-(defn- print-form [code string]
+(defn- print-form 
   "Returns an updated code string with an appended print form."
-  (if (empty? string)
+	[code string]
+	(if (empty? string)
     code
     (str code "\n(print \"" string "\")")))
 
-(defn- eval-form [code form-string]
+(defn- eval-form 
   "Returns an updated code string with an appended lisp form."
+	[code form-string]
   (if (empty? form-string)
     code
     (str code "\n" form-string)))
 
-(defn- eval-print-form [code form-string]
+(defn- eval-print-form 
   "Returns an updated code string with an appended form that 
   prints the output of a lisp form."
+	[code form-string]
   (if (empty? form-string)
     code
     (str code "\n(print " form-string ")")))
 
-(defn- handle-trim [code buffer text last-tag]
+(defn- handle-trim 
   "Returns an updated code string with an appended print form 
   and a newline, or lack thereof depending on the closing
   tag."
+	[code buffer text last-tag]
   (print-form code 
               (if (= last-tag "-%>")
                 (str buffer text)
                 (str buffer text "\\n"))))
 
-(defn- generate-template [template] 
+(defn- generate-template 
   "Generates a clojure program that represents a template with a set of embedded 
   evaluations.  By eval'ing this form under different bindings you can 
   populate the template with different values."
+	[template] 
   (let [scn (scanner template)
-        re-start #"(.*?)(<%=|<%;|<%)" ; Start tokens
-        re-end #"(.*?)(%>|-%>)"]      ; End tokens
+        re-start #"(.*?)(<\?clj|<\?clj=|<\?clj;|<%=|<%;|<%)" ; Start tokens
+        re-end #"(.*?)(%>|-%>|\?>|-\?>)"]      ; End tokens
     (loop [code ""
            buffer ""
            cur-tag nil
@@ -82,6 +88,7 @@
                   "<%"  (recur (eval-form code text) "" nil delim)
                   ; eval and insert
                   "<%=" (recur (eval-print-form code text) "" nil delim)
+                  "<?clj" (recur (eval-print-form code text) "" nil delim)
                   ; skip commented forms
                   "<%;" (recur code buffer nil delim)))
 
@@ -89,22 +96,22 @@
           ; insert print forms for normal content
           (let [[text delim] ((:scan scn) re-start)]
             (re-case delim        ; We are in regular content
-                     #"(^%|<%|<%=|<%;)" (recur (print-form code (str buffer text)) "" delim nil)
+                     #"(<?clj|^%|<%|<%=|<%;)" (recur (print-form code (str buffer text)) "" delim nil)
                      #"\n"           (recur (handle-trim code buffer text last-tag) "" cur-tag nil))))
         
         ; Return a do-wrapped set of forms
         (str "(do " code ")")))))
 
-(defn template [tpl] 
+(defn template
   "Returns a function representing a compiled template.  The function 
   returns a string, and by calling this function under different bindings 
   the same template can be populated with different values."
+	[tpl] 
   (let [tpl-code (generate-template tpl)
         tpl-forms (with-in-str tpl-code (read))]
     (fn [] (with-out-str (eval tpl-forms)))))
 
-
-; Testing and examples follow
+;; Testing and examples follow
 (comment
 (def bar (ref 1))
 (defn foo [a] (str a @bar))
