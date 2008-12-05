@@ -1,7 +1,4 @@
-# clj-libs
-Home for some Clojure library projects...
-
-### Template: 
+## Template: 
 
 A library for creating templates to generate HTML pages, email messages,
 configuration files etc.  You can embed Clojure expressions inside tags in a
