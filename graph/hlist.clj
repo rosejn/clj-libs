@@ -15,6 +15,13 @@
 ;;  rosejn (gmail)
 ;;  Created 15 November 2008
 
+(ns graph.hlist)
+(refer 'graph)
+
+(defn- uuid 
+  "Creates a random, immutable UUID object that is comparable using the '=' function."
+  [] (. java.util.UUID randomUUID))
+
 (defstruct hlist-graph-store :uuid :nodes :edges :names :graph-store)
 (defstruct hlist-node :uuid :in-edges :out-edges)
 (defstruct hlist-edge :uuid :src :dest)
@@ -22,14 +29,16 @@
 (defn hlist-graph [] 
   (struct hlist-graph-store (uuid) {} {} {} :hlist))
 
+(register-graph-store :hlist hlist-graph)
+
 (defmethod get-root :hlist [g] 
   (:root (:names g)))
 
-(defmethod get-node :hlist [g node-id]
-  (get (:nodes g) node-id))
+(defmethod get-node :hlist [g id]
+  (get (:nodes g) id))
 
-(defmethod get-edge :hlist [g edge-id]
-  (get (:edges g) edge-id))
+(defmethod get-edge :hlist [g id]
+  (get (:edges g) id))
 
 (defmethod node-count :hlist [g]
   (count (:nodes g)))

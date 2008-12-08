@@ -13,42 +13,61 @@
 ;;  rosejn (gmail)
 ;;  Created 15 November 2008
 
-(ns graph)
+(ns graph
+  (:use [clojure.contrib.fcase :only (case)]))
 
-(def default-graph-store (ref nil))
+(def graph-stores (ref {}))
 
-(defn uuid 
-  "Creates a random, immutable UUID object that is comparable using the '=' function."
-  [] (. java.util.UUID randomUUID))
+(defn register-graph-store 
+  "Add a back-end graph store to the set of available graph types."
+  [key store-fn] 
+    (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
 
 (defn graph 
-  ([] (@default-graph-store))
-  ([graph-store] (graph-store)))
+  ([] (graph :hlist))
+  ([store-key & args] (apply (store-key @graph-stores) args)))
 
-(defmulti get-root :graph-store)
-(defmulti get-node :graph-store)
-(defmulti get-edge :graph-store)
+(defmulti get-root    :graph-store)
+(defmulti get-node    :graph-store)
+(defmulti get-edge    :graph-store)
 
-(defmulti nodes :graph-store)
-(defmulti edges :graph-store)
+(defmulti nodes       :graph-store)
+(defmulti edges       :graph-store)
 
-(defmulti node-count :graph-store)
-(defmulti edge-count :graph-store)
+(defmulti node-count  :graph-store)
+(defmulti edge-count  :graph-store)
 
-(defmulti add-node :graph-store)
+(defmulti add-node    :graph-store)
 (defmulti remove-node :graph-store)
 
-(defmulti add-edge :graph-store)
+(defmulti add-edge    :graph-store)
 (defmulti remove-edge :graph-store)
 
-(defmulti in-nodes :graph-store)
-(defmulti out-nodes :graph-store)
+(defmulti in-nodes    :graph-store)
+(defmulti out-nodes   :graph-store)
 
-(defmulti in-edges :graph-store)
-(defmulti out-edges :graph-store)
+(defmulti in-edges    :graph-store)
+(defmulti out-edges   :graph-store)
 
-(load-file "hlist.clj")
-(dosync (ref-set default-graph-store hlist-graph))
+(defmacro with-tx [& body]
+  `(let [tx (new Transaction)]
+     (try 
+       (do 
+         (.begin tx)
+         ~@body )
+       (catch Exception e 
+         (do 
+           (.printStackTrace e)
+           (throw e)))
+       (finally (.finish tx)))))
+
+;(load-file "graph/hlist.clj")
+;(load-file "graph/neo.clj")
+(use 'graph.hlist)
+(use 'graph.neo)
+
+(defn reload []
+  (require '(graph hlist neo) :reload-all))
 
 ;; Tests follow
 (use 'clojure.contrib.test-is)
@@ -68,7 +87,7 @@
                (rest uuids))))))
 
 (deftest add-remove []
-  (let [added (add-n 100 (graph))
+  (let [added (add-n 100 (graph :neo "db"))
         nc1 (node-count added)
         removed (remove-n 50 added)
         nc2 (node-count removed)]
