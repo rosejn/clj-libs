@@ -14,7 +14,8 @@
 ;;  Created 15 November 2008
 
 (ns graph
-  (:use [clojure.contrib.fcase :only (case)]))
+  (:use [clojure.contrib.fcase :only (case)
+         clojure.contrib.str-utils :only (str-join)]))
 
 (def graph-stores (ref {}))
 
@@ -27,7 +28,13 @@
   ([] (graph :hlist))
   ([store-key & args] (apply (store-key @graph-stores) args)))
 
-(defmulti get-root    :graph-store)
+(defmulti get-node    :graph-store)
+(defmulti set-root    :graph-store)
+
+(defmulti graph-id    :graph-store)
+(defmulti node-id     :graph-store)
+(defmulti edge-id     :graph-store)
+
 (defmulti get-node    :graph-store)
 (defmulti get-edge    :graph-store)
 
@@ -49,6 +56,11 @@
 (defmulti in-edges    :graph-store)
 (defmulti out-edges   :graph-store)
 
+(defn to_dot [g]
+  (str-join "\n" 
+  (print "digraph" (graph-id g) "{")
+    (map (nodes g)
+
 (defmacro with-tx [& body]
   `(let [tx (new Transaction)]
      (try 
@@ -61,8 +73,6 @@
            (throw e)))
        (finally (.finish tx)))))
 
-;(load-file "graph/hlist.clj")
-;(load-file "graph/neo.clj")
 (use 'graph.hlist)
 (use 'graph.neo)
 
@@ -87,7 +97,8 @@
                (rest uuids))))))
 
 (deftest add-remove []
-  (let [added (add-n 100 (graph :neo "db"))
+  ;(let [added (add-n 100 (graph :neo "db"))
+  (let [added (add-n 100 (graph))
         nc1 (node-count added)
         removed (remove-n 50 added)
         nc2 (node-count removed)]
