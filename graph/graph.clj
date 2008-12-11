@@ -22,7 +22,7 @@
 (defn register-graph-store 
   "Add a back-end graph store to the set of available graph types."
   [key store-fn] 
-    (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
+  (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
 
 (defn graph 
   ([] (graph :hlist))
@@ -58,8 +58,9 @@
 
 (defn to_dot [g]
   (str-join "\n" 
-  (print "digraph" (graph-id g) "{")
-    (map (nodes g)
+            (pr-str "digraph" (graph-id g) "{")
+            ;(map (nodes g))))
+            (pr-str "}")))
 
 (defmacro with-tx [& body]
   `(let [tx (new Transaction)]
@@ -80,6 +81,7 @@
   (require '(graph hlist neo) :reload-all))
 
 ;; Tests follow
+(comment )
 (use 'clojure.contrib.test-is)
 
 (defn add-n [n g]
@@ -97,11 +99,12 @@
                (rest uuids))))))
 
 (deftest add-remove []
-  ;(let [added (add-n 100 (graph :neo "db"))
-  (let [added (add-n 100 (graph))
-        nc1 (node-count added)
-        removed (remove-n 50 added)
-        nc2 (node-count removed)]
-    (is (= 50 (- nc1 nc2)))))
+         ;(let [added (add-n 100 (graph :neo "db"))
+         (let [added (add-n 100 (graph))
+               nc1 (node-count added)
+               removed (remove-n 50 added)
+               nc2 (node-count removed)]
+           (is (= 50 (- nc1 nc2)))))
 
 (run-tests)
+;)
