@@ -28,11 +28,8 @@
       ;      (handleUpstream [context event] (proxy-super handleUpstream context event))
       ; Setup serialization when the channel is created
       (channelOpen [context event] 
-                   (log :info "Channel open...")
-                   (let [pipeline (.getPipeline (.getChannel event))]
-                     (.addFirst pipeline "encoder" (new ObjectEncoder))
-                     (.addFirst pipeline "decoder" (new ObjectDecoder))
-                     (try-handler handlers :on-open pipeline)))
+                   (log :info "Channel open... with handlers: " (keys handlers))
+                   (try-handler handlers :on-open (.getPipeline (.getChannel event))))
 
       (channelConnected [context event] 
                         (log :info "Channel connected...")
@@ -43,8 +40,11 @@
                        (try-handler handlers :on-msg (.getMessage event) (responder event)))
 
       (exceptionCaught [context event] 
-                       (let [cause (.getCause event)]
-                         (log :info "Got an exception: " (.getMessage cause))
+                       (let [cause (.getCause event)
+                             s-writer (new java.io.StringWriter)
+                             p-writer (new java.io.PrintWriter s-writer)]
+                         (.printStackTrace cause p-writer)
+                         ;(log :info "Got an exception: " (.getMessage cause) (.toString p-writer))
                          (try-handler handlers :on-error cause) 
                          (.close (.getChannel event)))))))
 
@@ -66,15 +66,27 @@
 (defn make-net-server [channel monitor] 
   (struct net-server :server channel monitor))
 
+(defn setup-object-pipeline [pipeline]
+  (log :info "Setting up an object encode/decode pipeline...")
+  (.addFirst pipeline "encoder" (new ObjectEncoder))
+  (.addFirst pipeline "decoder" (new ObjectDecoder)))
+
+(defn setup-handlers [handler-or-hash]
+  (let [handlers (if (associative? handler-or-hash)
+                   handler-or-hash
+                   {:on-msg handler-or-hash})
+        handlers (if (contains? handlers :on-open)
+                   handlers
+                   (assoc handlers :on-open setup-object-pipeline))]
+    handlers))
+
 (defn server 
   ([port-num handler-or-hash]
              (let [chan-factory (new NioServerSocketChannelFactory
                                      (Executors/newCachedThreadPool)
                                      (Executors/newCachedThreadPool))
                    bootstrap (new ServerBootstrap chan-factory)
-                   handlers (if (associative? handler-or-hash)
-                              handler-or-hash
-                              {:on-msg handler-or-hash})
+                   handlers (setup-handlers handler-or-hash)
                    handler (generic-handler handlers)
                    monitor (throughput-monitor "server")
                    p (.getPipeline bootstrap)]
@@ -107,9 +119,7 @@
                      (Executors/newCachedThreadPool)
                      (Executors/newCachedThreadPool))
         bootstrap (new ClientBootstrap factory)
-        handlers (if (associative? handler-or-hash)
-                   handler-or-hash
-                   {:on-msg handler-or-hash})
+        handlers (setup-handlers handler-or-hash) 
         handler (generic-handler handlers)
         monitor (throughput-monitor "client")]
     (let [p (.getPipeline bootstrap)]
