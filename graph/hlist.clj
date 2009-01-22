@@ -31,6 +31,15 @@
 
 (register-graph-store :hlist hlist-graph)
 
+(defmethod graph-id :hlist [g]
+  (:uuid g))
+
+(defmethod node-id :hlist [n]
+  (:uuid n))
+
+(defmethod edge-id :hlist [e]
+  (:uuid e))
+
 (defmethod get-root :hlist [g] 
   (:root (:names g)))
 
@@ -51,6 +60,9 @@
 
 (defmethod edges :hlist [g]
   (map (fn [[k v]] k) (:edges g)))
+
+(defmethod in-nodes :hlist [g n]
+  (
 
 (defmethod add-node :hlist [g node-props]
   (let [props (or (first node-props) {})
