@@ -38,8 +38,8 @@
 (defmulti get-node    :graph-store)
 (defmulti get-edge    :graph-store)
 
-(defmulti nodes       :graph-store)
-(defmulti edges       :graph-store)
+(defmulti all-nodes   :graph-store)
+(defmulti all-edges   :graph-store)
 
 (defmulti node-count  :graph-store)
 (defmulti edge-count  :graph-store)

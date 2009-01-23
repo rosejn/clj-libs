@@ -22,9 +22,9 @@
   "Creates a random, immutable UUID object that is comparable using the '=' function."
   [] (. java.util.UUID randomUUID))
 
-(defstruct hlist-graph-store :uuid :nodes :edges :names :graph-store)
-(defstruct hlist-node :uuid :in-edges :out-edges)
-(defstruct hlist-edge :uuid :src :dest)
+(defstruct hlist-graph-store :uuid :nodes :edges :names :props :graph-store)
+(defstruct hlist-node :uuid :in-edges :out-edges :props)
+(defstruct hlist-edge :uuid :src :dest :props)
 
 (defn hlist-graph [] 
   (struct hlist-graph-store (uuid) {} {} {} :hlist))
@@ -62,7 +62,7 @@
   (map (fn [[k v]] k) (:edges g)))
 
 (defmethod in-nodes :hlist [g n]
-  (
+  (map (fn [[k v]] 
 
 (defmethod add-node :hlist [g node-props]
   (let [props (or (first node-props) {})
