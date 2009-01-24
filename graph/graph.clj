@@ -14,25 +14,32 @@
 ;;  Created 15 November 2008
 
 (ns graph
-  (:use [clojure.contrib.fcase :only (case)]))
+;  (:use (clojure.contrib.fcase :only [case])
+   (:use [clojure.contrib.str-utils :only [str-join]]))
 
 (def graph-stores (ref {}))
 
 (defn register-graph-store 
   "Add a back-end graph store to the set of available graph types."
   [key store-fn] 
-    (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
+  (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
 
 (defn graph 
   ([] (graph :hlist))
   ([store-key & args] (apply (store-key @graph-stores) args)))
 
 (defmulti get-root    :graph-store)
+(defmulti set-root    :graph-store)
+
+(defmulti graph-id    :graph-store)
+(defmulti node-id     :graph-store)
+(defmulti edge-id     :graph-store)
+
 (defmulti get-node    :graph-store)
 (defmulti get-edge    :graph-store)
 
-(defmulti nodes       :graph-store)
-(defmulti edges       :graph-store)
+(defmulti all-nodes   :graph-store)
+(defmulti all-edges   :graph-store)
 
 (defmulti node-count  :graph-store)
 (defmulti edge-count  :graph-store)
@@ -49,20 +56,22 @@
 (defmulti in-edges    :graph-store)
 (defmulti out-edges   :graph-store)
 
-(defmacro with-tx [& body]
-  `(let [tx (new Transaction)]
-     (try 
-       (do 
-         (.begin tx)
-         ~@body )
-       (catch Exception e 
-         (do 
-           (.printStackTrace e)
-           (throw e)))
-       (finally (.finish tx)))))
+(defn dfs-runner- [g current visit visited]
+  (visit current)
+  (let [visited (assoc visited (node-id current) true)
+        children (out-nodes g current)]
+    (map (fn [child]
+           (if (contains? visited (node-id child)
 
-;(load-file "graph/hlist.clj")
-;(load-file "graph/neo.clj")
+(defn dfs [g start visitor]
+  (dfs-runner g start visitor {}))
+
+(defn to_dot [g]
+  (str-join "\n" 
+            (pr-str "digraph" (graph-id g) "{")
+            ;(map (nodes g))))
+            (pr-str "}")))
+
 (use 'graph.hlist)
 (use 'graph.neo)
 
@@ -70,6 +79,7 @@
   (require '(graph hlist neo) :reload-all))
 
 ;; Tests follow
+(comment )
 (use 'clojure.contrib.test-is)
 
 (defn add-n [n g]
@@ -86,11 +96,24 @@
         (recur (remove-node graph (first uuids))
                (rest uuids))))))
 
-(deftest add-remove []
-  (let [added (add-n 100 (graph :neo "db"))
-        nc1 (node-count added)
-        removed (remove-n 50 added)
-        nc2 (node-count removed)]
-    (is (= 50 (- nc1 nc2)))))
+(deftest add-remove-hlist []
+         (let [added (add-n 100 (graph))
+               nc1 (node-count added)
+               removed (remove-n 50 added)
+               nc2 (node-count removed)]
+           (is (= 50 (- nc1 nc2)))))
+
+(comment
+(deftest add-remove-neo []
+         (with-tx 
+         (let [g (graph :neo "db")
+               added (add-n 100 g)
+         ;(let [added (add-n 100 (graph))
+               nc1 (node-count added)
+               removed (remove-n 50 added)
+               nc2 (node-count removed)]
+           (is (= 50 (- nc1 nc2)))))))
+)
 
 (run-tests)
+

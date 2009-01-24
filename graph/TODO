@@ -1,0 +1,14 @@
+Neo:
+
+Hlist:
+* Add in-nodes and out-nodes (edges) to hlist.
+* Finish up DFS and BFS implementations in graph
+
+Everything:
+* Add gif output support using DOT -> imagemagick utils or something
+
+* Breakout plasma code on top of graph library
+* Do a simple grid resource monitoring example
+* Do a DHT example
+* Do a random walk example
+* Do a distributed cluster example
