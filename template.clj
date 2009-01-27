@@ -1,1 +1,1 @@
-(load-file "template/template.clj")
+(require 'template.template)

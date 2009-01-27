@@ -14,9 +14,14 @@
 ;;  Created 15 November 2008
 
 (ns graph.neo
-  (:use neo4j))
+  (:import (org.neo4j.api.core EmbeddedNeo))
+  (:use neo4j)
+  (:use clojure.contrib.seq-utils))
+  
+(refer 'graph)
+(refer 'neo4j)
 
-(defn neo-graph [&data-dir]
+(defn neo-graph [& [data-dir]]
   (let [data-dir (or data-dir "graph-data")]
     (new EmbeddedNeo data-dir)))
 
@@ -49,8 +54,9 @@
 (defmethod remove-node :neo [g n]
   (.delete g n))
 
-(defmethod add-edge :neo [g src dest]
-  (relate (get-node src) :link (get-node dest)))
+(defmethod add-edge :neo [g src label dest & [props]]
+  (let [edge (relate src label dest)]
+    (map (fn [[k v]] (.setProperty edge k v)) props)))
 
 (defmethod remove-edge :neo [g e]
   (.delete e))
@@ -69,6 +75,13 @@
   (map (fn [edge] (.getEndNode edge))
        (out-edges g n)))
 
+(defmethod path-query :neo [g start path]
+  (if (empty? path)
+    start
+    (let [label (first path)
+          children (out-nodes g start)]
+      (map (fn [child] (path-query child (rest path))) children))))
+
 (defmethod dfs :neo [g start visitor]
   (map visitor 
        (seq (.iterator (.traverse start neo4j/depth neo4j/end-of-graph 
@@ -81,3 +94,4 @@
 
 (defn close [g]
   (. g shutdown))
+

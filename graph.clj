@@ -1,1 +1,1 @@
-(load-file "graph/graph.clj")
+(require 'graph.graph)

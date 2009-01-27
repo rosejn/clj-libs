@@ -14,8 +14,7 @@
 ;;  Created 15 November 2008
 
 (ns graph
-;  (:use (clojure.contrib.fcase :only [case])
-   (:use [clojure.contrib.str-utils :only [str-join]]))
+  (:use [clojure.contrib.str-utils :only [str-join]]))
 
 (def graph-stores (ref {}))
 
@@ -25,7 +24,7 @@
   (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
 
 (defn graph 
-  ([] (graph :hlist))
+  ([] (graph :neo))
   ([store-key & args] (apply (store-key @graph-stores) args)))
 
 (defmulti get-root    :graph-store)
@@ -56,15 +55,10 @@
 (defmulti in-edges    :graph-store)
 (defmulti out-edges   :graph-store)
 
-(defn dfs-runner- [g current visit visited]
-  (visit current)
-  (let [visited (assoc visited (node-id current) true)
-        children (out-nodes g current)]
-    (map (fn [child]
-           (if (contains? visited (node-id child)
+(defmulti path-query  :graph-store)
 
-(defn dfs [g start visitor]
-  (dfs-runner g start visitor {}))
+(defmulti dfs         :graph-store)
+(defmulti bfs         :graph-store)
 
 (defn to_dot [g]
   (str-join "\n" 
@@ -72,23 +66,31 @@
             ;(map (nodes g))))
             (pr-str "}")))
 
-(use 'graph.hlist)
+;(use 'graph.hlist)
 (use 'graph.neo)
 
 (defn reload []
-  (require '(graph hlist neo) :reload-all))
+;  (require '(graph hlist neo) :reload-all))
+  (require '(graph neo) :reload-all))
 
+(comment
+(deftest add-remove-hlist []
+         (let [added (add-n 100 (graph))
+               nc1 (node-count added)
+               removed (remove-n 50 added)
+               nc2 (node-count removed)]
+           (is (= 50 (- nc1 nc2))))))
+  
 ;; Tests follow
-(comment )
 (use 'clojure.contrib.test-is)
 
-(defn add-n [n g]
+(defn add-n [g n]
   (if (zero? n)
     g
-    (recur (dec n) (add-node g {:val n}))))
+    (recur (add-node g {:val n}) (dec n))))
 
-(defn remove-n [n g]
-  (let [ids (take n (nodes g))]
+(defn remove-n [g n]
+  (let [ids (take n (all-nodes g))]
     (loop [graph g
            uuids ids]
       (if (empty? uuids)
@@ -96,24 +98,15 @@
         (recur (remove-node graph (first uuids))
                (rest uuids))))))
 
-(deftest add-remove-hlist []
-         (let [added (add-n 100 (graph))
-               nc1 (node-count added)
-               removed (remove-n 50 added)
-               nc2 (node-count removed)]
-           (is (= 50 (- nc1 nc2)))))
-
-(comment
 (deftest add-remove-neo []
-         (with-tx 
-         (let [g (graph :neo "db")
-               added (add-n 100 g)
-         ;(let [added (add-n 100 (graph))
-               nc1 (node-count added)
-               removed (remove-n 50 added)
-               nc2 (node-count removed)]
-           (is (= 50 (- nc1 nc2)))))))
-)
+  (neo4j/tx 
+    (let [g (graph :neo "db")]
+      (neo4j/success))))
 
-(run-tests)
+;          added (add-n g 100)
+;          nc1 (node-count added)
+;          removed (remove-n g 50)
+;          nc2 (node-count removed)]
+;      (is (= 50 (- nc1 nc2))))))
 
+(defn test-neo [] (run-tests (find-ns 'graph)))
