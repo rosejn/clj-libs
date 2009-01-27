@@ -55,12 +55,15 @@
 
 (def *tx* nil)
 
+(defn success [] (.success *tx*))
+
 (defmacro in-tx [g & body]
   `(binding [*tx* (.beginTx ~g)]
      (try ~@body
-       (finally (.shutdown ~g)))))
-
-(defn done [] (.success *tx*))
+       (catch Exception e# 
+         (println "Exception in transaction: " e#)
+         (throw e#))
+       (finally (.finish *tx*)))))
 
 (defn get-root [g] 
   (.getReferenceNode g))
@@ -81,7 +84,7 @@
 (defn node-count [g])
 (defn edge-count [g])
 
-(defn add-node [g & props]
+(defn add-node [g & [props]]
   (let [n (.createNode g)]
     (map (fn [[k v]] (.setProperty n k v)) props)
     n))
@@ -97,36 +100,56 @@
   (let [edge (.createRelationshipTo src dest (edge-type label))]
     (map (fn [[k v]] (.setProperty edge k v)) props)))
 
-(defn remove-edge [g e]
+(defn link-new [g src label & [props]]
+  (let [n (if props (add-node g props) (add-node g))]
+    (add-edge src label n)
+    n))
+
+(defn remove-edge [e]
   (.delete e))
 
-(defn in-edges [g n]
-  (seq (.getRelationships n INCOMING)))
+(defn- edge-filter [label]
+  (println "filtering with label: " label)
+  (fn [edge] (= label (keyword (.name (.getType edge))))))
 
-(defn out-edges [g n]
-  (seq (.getRelationships n OUTGOING)))
+(defn- get-edges [n direction label]
+  (println "get-edges *tx*: " *tx*)
+  (let [edges (seq (.getRelationships n direction))]
+  (println "get-edges2 *tx*: " *tx*)
+    (if label
+      (filter (edge-filter label) edges)
+      edges)))
 
-(defn in-nodes [g n]
+(defn in-edges [n & [label]]
+  (get-edges n INCOMING label))
+
+(defn out-edges [n & [label]]
+  (println "out-edges label: " label)
+  (get-edges n OUTGOING label))
+
+(defn in-nodes [n & [label]]
   (map (fn [edge] (.getStartNode edge))
-       (in-edges g n)))
+       (in-edges n label)))
 
-(defn out-nodes [g n]
+(defn out-nodes [n & [label]]
+  (println "out-nodes label: " label)
   (map (fn [edge] (.getEndNode edge))
-       (out-edges g n)))
+       (out-edges n label)))
 
-(defn path-query [g start path]
+(defn path-query [start path]
+  (println "path: " path "\n*tx*: " *tx*)
   (if (empty? path)
     start
     (let [label (first path)
-          children (out-nodes g start)]
+          children (out-nodes start label)]
       (map (fn [child] (path-query child (rest path))) children))))
 
-(defn dfs [g start visitor]
+(defn dfs [start visitor]
   (map visitor 
        (seq (.iterator (.traverse start DEPTH END-OF-GRAPH 
                                   ALL :link OUTGOING)))))
 
-(defn bfs [g start visitor]
+(defn bfs [start visitor]
   (map visitor 
        (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
                                   ALL :link OUTGOING)))))
