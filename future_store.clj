@@ -16,6 +16,8 @@
 ;;  rosejn (gmail)
 ;;  Created 15 November 2008
 
+(use 'clj-backtrace.repl)
+
 (ns future-store
   (:import (org.neo4j.api.core Direction
                                EmbeddedNeo
@@ -32,6 +34,7 @@
                                TraversalPosition
                                Traverser
                                Traverser$Order))
+  (:import (java.io File))
   (:use clojure.contrib.seq-utils))
   
 (def BOTH Direction/BOTH)
@@ -53,9 +56,28 @@
 (defn close-graph [g]
   (.shutdown g))
 
-(def *tx* nil)
+(declare delete-dir)
 
+(defn delete-files [file-list]
+  (if (not (empty? file-list))
+    (let [f (first file-list)]
+      (if (.isDirectory f) (delete-dir f) (.delete f))
+      (recur (rest file-list)))))
+
+(defn delete-dir [dir]
+  (if (.exists dir)
+    (do 
+      (let [files (.listFiles dir)]
+        (delete-files files))
+      (.delete dir))))
+
+(defn delete-graph [path]
+  (let [dir (new File path)]
+    (delete-dir dir)))
+
+(def *tx* nil)
 (defn success [] (.success *tx*))
+(defn failure [] (.failure *tx*))
 
 (defmacro in-tx [g & body]
   `(binding [*tx* (.beginTx ~g)]
@@ -74,6 +96,12 @@
 (defn get-edge [g id]
   (.getRelationshipById g id))
 
+(defn get-property [obj key]
+  (.getProperty obj (str key)))
+
+(defn set-property [obj key value]
+  (.setProperty obj (str key) value))
+
 ; These should return lazy sequences sitting on top of the java iterators
 (defn all-nodes [g])
 (defn all-edges [g])
@@ -86,7 +114,7 @@
 
 (defn add-node [g & [props]]
   (let [n (.createNode g)]
-    (map (fn [[k v]] (.setProperty n k v)) props)
+    (map (fn [[k v]] (set-property n k v)) props)
     n))
 
 (defn remove-node [g n]
@@ -98,7 +126,7 @@
 
 (defn add-edge [#^Node src #^Keyword label #^Node dest & [props]]
   (let [edge (.createRelationshipTo src dest (edge-type label))]
-    (map (fn [[k v]] (.setProperty edge k v)) props)))
+    (map (fn [[k v]] (set-property edge k v)) props)))
 
 (defn link-new [g src label & [props]]
   (let [n (if props (add-node g props) (add-node g))]
@@ -154,3 +182,32 @@
        (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
                                   ALL :link OUTGOING)))))
 
+;; Tests follow
+(use 'clojure.contrib.test-is)
+
+(defn add-n [g n]
+  (if (zero? n)
+    g
+    (recur (add-node g {:val n}) (dec n))))
+
+(deftest get-set-props []
+  (try 
+    (let [db (open-graph "test-db")]
+      (in-tx db (set-property (get-root db) "foo" 42))
+      (in-tx db (is (= 42 (get-property (get-root db) "foo")))))
+      (finally (delete-graph "test-db"))))
+
+(deftest simple-query []
+  (try 
+    (let [db (open-graph "test-db")]
+      (in-tx db (do (link-new db (get-root db):foo {"value" 42}) (success)))
+;      (in-tx db (link-new db (link-new db (link-new db (link-new db root 
+;                  :foo) :foo) :foo) :foo {:value 42})
+;        (success))
+    (in-tx db (do (is (= 42 
+                     (.getProperty (first (path-query (get-root db) [:foo])) "value")))
+           (success))))
+         (finally (delete-graph "test-db"))))
+
+
+(defn fs-test [] (run-tests (find-ns 'future-store)))
