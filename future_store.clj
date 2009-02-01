@@ -92,16 +92,23 @@
 
 (defmacro with-graph [ #^String path & body ]
   `(binding [*g* (open-graph ~path)]
-    (try ~@body
+    (try 
+      (let [wg-result# (do ~@body)]
+        (comment info "with-graph result: " wg-result#)
+        wg-result#)
       (finally (close-graph *g*)))))
 
 (defmacro in-tx [& body]
   `(binding [*tx* (.beginTx *g*)]
-     (try ~@body
+     (try 
+       (let [tx-result# (do ~@body)]
+         (comment info "in-tx result: " tx-result#)
+         tx-result#)
        (catch Exception e# 
-         (println "Exception in transaction: " e#)
-         (throw e#))
-       (finally (.finish *tx*)))))
+         (do 
+           (warning "Exception in transaction: " e#)
+           (throw e#)))
+     (finally (.finish *tx*)))))
 
 ;; Do the enclosing operations inside a transaction if they are not already
 ;; being performed in an outer transaction created by the user.
@@ -109,24 +116,44 @@
   `(if *tx* 
      (do ~@body)
      (do (in-tx *g* 
-                (let [result# ~@body]
-                  (success)
-                  result#)))))
+       (let [ctx-result# (do ~@body)]
+         (comment info "check-tx result: " ctx-result#)
+         (success)
+         ctx-result#)))))
 
-(defn get-root [] 
+(defn root-node [] 
   (check-tx (.getReferenceNode *g*)))
 
-(defn get-node [id]
-  (check-tx (.getNodeById *g* id)))
+(defn find-node [id]
+  (info "(find-node " id ")")
+  (check-tx 
+    (try 
+      (.getNodeById *g* id)
+      (catch NotFoundException e nil))))
 
-(defn get-edge [id]
-  (check-tx (.getRelationshipById *g* id)))
+(defn find-edge [id]
+  (check-tx 
+    (try 
+      (.getRelationshipById *g* id)
+      (catch NotFoundException e nil))))
+
+(defn edge-label [e]
+  (check-tx
+    (.name (.getType e))))
+
+(defn edge-src [e]
+  (check-tx
+    (.getStartNode e)))
+
+(defn edge-tgt [e]
+  (check-tx
+    (.getEndNode e)))
 
 (defn get-id [obj]
   (.getId obj))
 
 (defn get-property [obj key]
-  (info "(get-property " (get-id obj) key ")")
+  (info "(get-property " (get-id obj) " " key ")")
   (check-tx (.getProperty obj (str key))))
 
 (defn get-properties [obj]
@@ -135,7 +162,7 @@
     (seq (.getPropertyKeys obj))))
 
 (defn set-property [obj key value]
-  (info "(set-property " (get-id obj) "{" key value "})")
+  (info "(set-property " (get-id obj) " {" key value "})")
   (check-tx (.setProperty obj (str key) value)))
 
 ; These should return lazy sequences sitting on top of the java iterators
@@ -152,74 +179,92 @@
   (info "(add-node " props ")")
   (check-tx 
     (let [n (.createNode *g*)]
-      (dorun (map (fn [[k v]] (set-property n k v)) props))
+      (doall (map (fn [[k v]] (set-property n k v)) props))
     n)))
 
-(defn remove-node [n]
-  (check-tx 
-    (.delete *g* n)))
+(defn remove-node [#^Node n]
+  (info "(remove-node " (get-id n) ")")
+  (try 
+    (check-tx 
+      (.delete n))
+      true
+    (catch NotFoundException e false)))
 
-(defn- edge-type [#^Keyword n]
+(defn edge-type [#^Keyword n]
   (proxy [RelationshipType] []
     (name [] (name n))))
 
 (defn add-edge [#^Node src #^Keyword label #^Node dest & [props]]
+  (info "(add-edge " (get-id src) " " label " " (get-id dest) " " props ")")
   (check-tx 
     (let [edge (.createRelationshipTo src dest (edge-type label))]
-    (map (fn [[k v]] (set-property edge k v)) props))))
+    (doall (map (fn [[k v]] (set-property edge k v)) props))
+      edge)))
 
-(defn link-new [src label & [props]]
+(defn link-new [#^Node src #^Keyword label & [props]]
+  (info "(link-new " (get-id src) " " label " " props ")")
   (check-tx 
     (let [n (if props (add-node props) (add-node))]
-    (add-edge src label n)
-    n)))
+      (add-edge src label n)
+      n)))
 
-(defn delete-edge [e]
+(defn remove-edge [#^Relationship e]
   (check-tx 
     (.delete e)))
 
 (defn- edge-filter [label]
-  (println "edge-filter " label ")")
-  (fn [edge] (= label (keyword (.name (.getType edge))))))
+  (println "(edge-filter " label ")")
+  (fn [edge] (= label (keyword (edge-label edge)))))
 
-(defn- get-edges [n direction label]
-  (info "(get-edges " (get-id n) direction label ")")
-  (check-tx (let [edges (seq (.getRelationships n direction))]
-    (if label
-      (filter (edge-filter label) edges)
-      edges))))
+(defn- get-edges [#^Node n #^Direction direction label]
+  (info "(get-edges " (get-id n) " " direction " " label ")")
+  (check-tx 
+    (let [edges (.getRelationships n direction)
+          filtered (if label
+                     (doall (filter (edge-filter label) (seq edges)))
+                     (seq edges))]
+      (info "get-edges edges: " (count (seq edges)))
+      (info "get-edges filtered: " (count (seq filtered)))
+      filtered)))
 
-(defn in-edges [n & [label]]
+(defn in-edges [#^Node n & [label]]
   (get-edges n INCOMING label))
 
-(defn out-edges [n & [label]]
+(defn out-edges [#^Node n & [label]]
   (info "(out-edges " label ")")
-  (get-edges n OUTGOING label))
+  (let [edges (get-edges n OUTGOING label)]
+    (info "out-edges result: " (count (seq edges)))
+    edges))
 
-(defn in-nodes [n & [label]]
+(defn in-nodes [#^Node n & [label]]
   (map (fn [edge] (.getStartNode edge))
        (in-edges n label)))
 
-(defn out-nodes [n & [label]]
+(defn out-nodes [#^Node n & [label]]
   (info "(out-nodes " label ")")
   (map (fn [edge] (.getEndNode edge))
        (out-edges n label)))
 
-(defn path-query [start path]
-  (info "(path-query " (get-id start) path ")")
+(defn path-query [#^Node start path]
+  (info "(path-query " (get-id start) " " path ")")
   (check-tx
-  (if (empty? path)
-    start
-    (let [label (first path)
-          children (out-nodes start label)]
-      (dorun (map (fn [child] (path-query child (rest path))) children))))))
+    (if (empty? path)
+      (do
+        (info "finished query at node: " start)
+        start)
+      (let [label (first path)
+            children (out-nodes start label)
+            blah (info "path-query label: " label " children: " (count children))
+            result (doall (map (fn [child] (path-query child (rest path))) children))]
+        (info "path-query result: " result)
+        (flatten result)))))
 
-(defn dfs [start visitor]
+(defn dfs [#^Node start visitor]
   (map visitor 
        (seq (.iterator (.traverse start DEPTH END-OF-GRAPH 
                                   ALL :link OUTGOING)))))
 
-(defn bfs [start visitor]
+(defn bfs [#^Node start visitor]
   (map visitor 
        (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
                                   ALL :link OUTGOING)))))
@@ -227,31 +272,52 @@
 ;; Tests follow
 (use 'clojure.contrib.test-is)
 
-(defn add-n [n]
-  (if (zero? n)
-    nil
-    (do (add-node {:val n})
-      (recur (dec n)))))
-
 (deftest get-set-props []
   (with-graph "test-db"
-    (set-property (get-root) "foo" 42)
-    (is (= 42 (get-property (get-root) "foo")))
-    (info (str "Properties: " (get-properties (get-root))))
+    (set-property (root-node) "foo" 42)
+    (is (= 42 (get-property (root-node) "foo")))
+    (info (str "Properties: " (get-properties (root-node))))
     (let [n (add-node {"bar" 1234})]
       (info (str "Properties: " (get-properties n)))
       (is (= 1234 (get-property n "bar")))))
   (delete-graph "test-db"))
 
-(deftest simple-query []
+(deftest add-remove []
   (with-graph "test-db"
-    (let [root (get-root)]
-      (link-new (get-root ) :foo {"value" 42})
-      (let [tgt (path-query root [:foo])]
-        (is (= 42 (.getProperty tgt "value"))))))
+    (let [n (add-node)
+          id (get-id n)]
+      (is (= id (get-id (find-node id))))
+      (remove-node n)
+      (is (nil? (find-node id)))))
   (delete-graph "test-db"))
 
-;      (in-tx (link-new (link-new (link-new (link-new root 
-;                  :foo) :foo) :foo) :foo {:value 42})
+(defn n-children [parent n label]
+  (info "(n-children " (get-id parent) " " n " " label ")")
+  (if (zero? n)
+    parent
+    (do
+      (link-new parent label)
+      (recur parent (- n 1) label))))
+
+(deftest simple-query []
+  (with-graph "test-db"
+    (let [root (root-node)]
+      (in-tx 
+        (n-children 
+          (link-new (link-new (link-new (link-new root 
+          :foo) :foo) :foo) :foo {"value" 42})
+          5
+          :bar)
+        (success))
+      (let [tgt (first (path-query root [:foo :foo :foo :foo]))
+            val (.getProperty tgt "value")
+            edge-count (count (out-edges tgt :bar))
+            spread-count (count (path-query root [:foo :foo :foo :foo :bar]))]
+        (info "simple-query tgt: " tgt)
+        (is (= 42 val))
+        (is (= 5 edge-count))
+        (is (= 5 spread-count)))))
+  (delete-graph "test-db"))
+
 ;        (success))
 (defn fs-test [] (run-tests (find-ns 'future-store)))
