@@ -84,22 +84,22 @@
   (let [dir (new File path)]
     (delete-dir dir)))
 
-(def *g* nil)
+(def *store* nil)
 (def *tx* nil)
 
 (defn success [] (.success *tx*))
 (defn failure [] (.failure *tx*))
 
 (defmacro with-store [ #^String path & body ]
-  `(binding [*g* (open-graph ~path)]
+  `(binding [*store* (open-graph ~path)]
      (try 
        (let [wg-result# (do ~@body)]
          (comment info "with-store result: " wg-result#)
          wg-result#)
-       (finally (close-graph *g*)))))
+       (finally (close-graph *store*)))))
 
 (defmacro in-tx [& body]
-  `(binding [*tx* (.beginTx *g*)]
+  `(binding [*tx* (.beginTx *store*)]
      (try 
        (let [tx-result# (do ~@body)]
          tx-result#)
@@ -114,25 +114,25 @@
 (defmacro check-tx [& body]
   `(if *tx* 
      (do ~@body)
-     (do (in-tx *g* 
+     (do (in-tx *store* 
                 (let [ctx-result# (do ~@body)]
                   (success)
                   ctx-result#)))))
 
 (defn root-node [] 
-  (check-tx (.getReferenceNode *g*)))
+  (check-tx (.getReferenceNode *store*)))
 
 (defn find-node [id]
   (info "(find-node " id ")")
   (check-tx 
     (try 
-      (.getNodeById *g* id)
+      (.getNodeById *store* id)
       (catch NotFoundException e nil))))
 
 (defn find-edge [id]
   (check-tx 
     (try 
-      (.getRelationshipById *g* id)
+      (.getRelationshipById *store* id)
       (catch NotFoundException e nil))))
 
 (defn edge-label [e]
@@ -179,7 +179,7 @@
 (defn add-node [& [props]]
   (info "(add-node " props ")")
   (check-tx 
-    (let [n (.createNode *g*)]
+    (let [n (.createNode *store*)]
       (doseq [[k v] props] (set-property n k v))
       n)))
 
@@ -246,14 +246,12 @@
 (defn in-nodes [#^Node n & [label]]
   (info "(in-nodes " (get-id n) " " label ")")
   (check-tx
-    (map (fn [edge] (.getStartNode edge))
-         (in-edges n label))))
+    (map #(.getStartNode %) (in-edges n label))))
 
 (defn out-nodes [#^Node n & [label]]
   (info "(out-nodes " (get-id n) " " label ")")
   (check-tx
-    (map (fn [edge] (.getEndNode edge))
-         (out-edges n label))))
+    (map #(.getEndNode %) (out-edges n label))))
 
 (defn path-query [#^Node start path]
   (info "(path-query " (get-id start) " " path ")")
@@ -265,7 +263,7 @@
       (let [label (first path)
                   children (out-nodes start label)
                   blah (info "path-query label: " label " children: " (count children))
-                  result (map (fn [child] (path-query child (rest path))) children)]
+                  result (map #(path-query % (rest path)) children)]
         (info "path-query result: " result)
         (flatten result)))))
 
