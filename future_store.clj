@@ -259,6 +259,10 @@
         (info "path-query result: " result)
         (flatten result)))))
 
+(defn path-first [#^Node start path]
+  (info "(path-first" (get-id start) " " path ")")
+  (first path-query))
+
 (defn dfs [#^Node start visitor]
   (map visitor 
        (seq (.iterator (.traverse start DEPTH END-OF-GRAPH 
