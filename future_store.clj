@@ -52,8 +52,8 @@
 (def ALL ReturnableEvaluator/ALL)
 (def ALL-BUT-START ReturnableEvaluator/ALL_BUT_START_NODE)
 
-(defn open-graph [path]
-  (info "(open-graph " path ")")
+(defn open-store [path]
+  (info "(open-store " path ")")
   (new EmbeddedNeo path))
 
 (defn close-graph [g]
@@ -87,7 +87,7 @@
 (defn failure [] (.failure *tx*))
 
 (defmacro with-store [ #^String path & body ]
-  `(binding [*store* (open-graph ~path)]
+  `(binding [*store* (open-store ~path)]
      (try 
        (let [wg-result# (do ~@body)]
          (comment info "with-store result: " wg-result#)
