@@ -34,9 +34,10 @@
                                TraversalPosition
                                Traverser
                                Traverser$Order))
-  (:import (java.util.logging Logger Level))
   (:import (java.io File))
-  (:use clojure.contrib.seq-utils))
+  (:use 
+     clojure.contrib.seq-utils 
+     jlog))
 
 (def BOTH Direction/BOTH)
 (def INCOMING Direction/INCOMING)
@@ -50,11 +51,6 @@
 
 (def ALL ReturnableEvaluator/ALL)
 (def ALL-BUT-START ReturnableEvaluator/ALL_BUT_START_NODE)
-
-(def FS-LOG (Logger/getLogger "future-store-log"))
-(defn info    [& msg] (.info FS-LOG (apply str msg)))
-(defn warning [& msg] (.warning FS-LOG (apply str msg)))
-(defn severe  [& msg] (.severe FS-LOG (apply str msg)))
 
 (defn open-graph [path]
   (info "(open-graph " path ")")
