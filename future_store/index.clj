@@ -45,3 +45,19 @@
   (delete-graph "test-db"))
 
 (defn fs-index-test [] (run-tests (find-ns 'future-store.index)))
+
+(def index-speed-test []
+  (with-store "index-speed-db"
+    (let [root (root-node)
+          size 1000]
+      (dotimes [i size] (link-new root :foo {:counter i}))
+
+      (let [index (index-property root :counter :foo)
+            num-trials 100
+            trial-seq (for [i (range num-trials)] (rand-int size))
+            raw-time (time (doseq [val trial-seq]
+                             (child-by-property root :foo :counter val)))
+            index-time (time (doseq [val trial-seq]
+                               (lookup index val)))]
+        (println "Raw time: " raw-time "\nIndex time: " index=-time))))
+  (delete-graph "test-db"))

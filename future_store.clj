@@ -52,6 +52,8 @@
 (def ALL-BUT-START ReturnableEvaluator/ALL_BUT_START_NODE)
 
 (def FS-LOG (Logger/getLogger "future-store-log"))
+(.setLevel FS-LOG Level/WARNING)
+
 (defn info    [& msg] (.info FS-LOG (apply str msg)))
 (defn warning [& msg] (.warning FS-LOG (apply str msg)))
 (defn severe  [& msg] (.severe FS-LOG (apply str msg)))
@@ -220,7 +222,7 @@
     (.delete e)))
 
 (defn- edge-filter [label]
-  (println "(edge-filter " label ")")
+  (info "(edge-filter " label ")")
   (fn [edge] (= label (keyword (edge-label edge)))))
 
 (defn- get-edges [#^Node n #^Direction direction label]
@@ -287,7 +289,6 @@
        (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
                                   ALL :link OUTGOING)))))
 
-  (comment 
 (defn- dot-nodes [nodes output & [options]]
   (if (empty? nodes)
     output
@@ -316,7 +317,6 @@
                            (dot-edges edges nil options) "\n}\n")]
       (success)
       output)))
-    )
 
 ;; Tests follow
 (use 'clojure.contrib.test-is)
