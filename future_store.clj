@@ -118,6 +118,8 @@
 (declare has-property?)
 (declare get-property)
 (declare set-property)
+(declare property-count)
+(declare get-properties)
 
 (defn wrap-entry [k v]
   (proxy [clojure.lang.IMapEntry] []
@@ -126,17 +128,20 @@
 
 (defn wrap-assoc [obj]
   (proxy [clojure.lang.Associative] []
-    (count [] 1)
-    (seq [] [])
-    (cons [[k v]] (set-property obj k v))
-    (empty [] {})
+    (count [] (property-count obj))
+    (seq   [] (get-properties obj))
+    (cons  [[k v]] (set-property obj k v))
+    (empty [] {}) ; Not sure what would make sense here...
+    (equiv [o] (and
+                 (= (class o) (class obj))
+                 (= (.getId o) (.getId obj))))
     (containsKey [k] (has-property? obj k))
     (entryAt     [k] (wrap-entry k (get-property obj k)))
-    (assoc     [k v] (do (set-property obj k v) (wrap-assoc obj)))
-    (valAt       [k] (get-property obj k))
-    (valAt     [k d] (if (has-property? obj k) 
-                       (get-property obj k)
-                       d))))
+    (assoc       [k v] (do (set-property obj k v) (wrap-assoc obj)))
+    (valAt       ([k] (get-property obj k))
+                 ([k d] (if (has-property? obj k) 
+                          (get-property obj k)
+                          d)))))
 
 (defn root-node [] 
   (check-tx (.getReferenceNode *store*)))
@@ -185,6 +190,16 @@
   (info "(get-property-keys " (get-id obj) ")")
   (check-tx 
     (seq (.getPropertyKeys obj))))
+
+(defn get-properties [obj]
+  (check-tx
+    (doall 
+      (map (fn [key]
+             [key (get-property obj key)])
+           (get-property-keys obj)))))
+
+(defn property-count [obj]
+  (count (get-property-keys obj)))
 
 (defn set-property [obj key value]
   (info "(set-property " (get-id obj) " {" key " " value "})")

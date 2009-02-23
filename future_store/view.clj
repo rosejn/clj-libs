@@ -15,7 +15,7 @@
                                TraversalPosition
                                Traverser
                                Traverser$Order))
-  (:use future-store jlog))
+  (:use future-store future-store.manager jlog))
 
 (def VIEWS (ref {}))
 
@@ -104,10 +104,10 @@
     (dosync
       (ref-set VIEWS (assoc @VIEWS singular spec)))
     {
-     :create (fn [props] (view-instance singular props))
-     :all    (fn [] (view-all singular))
-     :find   (fn [arg] (view-find singular arg))
-     :delete (fn [arg] (view-delete singular arg))
+     :create (fn [props] (manager-do #(view-instance singular props)))
+     :all    (fn [] (manager-do #(view-all singular)))
+     :find   (fn [arg] (manager-do #(view-find singular arg)))
+     :delete (fn [arg] (manager-do #(view-delete singular arg)))
      }))
 
 (defmacro defview [name & [args]]
@@ -127,6 +127,9 @@
   (let [model-name (nth (re-find #".*\.(.*)" (str full-name)) 1)]
     (info "(view " full-name ") => "  model-name)
     `(.addAlias *ns* (symbol ~model-name) (find-ns ~full-name))))
+
+(defn view-store [store-name]
+  (manager-start store-name))
 
 ;; TODO:
 ;; * relation helpers: create functions that handle the queries necessary 

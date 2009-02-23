@@ -4,7 +4,7 @@
              Callable 
              LinkedBlockingDeque
              FutureTask))
-  (:use future-store))
+  (:use future-store jlog))
 
 
 (def MANAGER-THREAD (ref nil))
@@ -16,6 +16,7 @@
   (with-store @STORE-NAME
     (while @RUNNING
       (let [future (.takeFirst @WORK-Q)]
+        (info "processing job...")
         (.run future)))))
 
 (defn manager-start 
@@ -26,6 +27,7 @@
       (ref-set STORE-NAME store-name)
       (ref-set RUNNING true)
       (ref-set MANAGER-THREAD (new Thread job-processor)))
+  (info "(manager-start " store-name ")")
   (.start @MANAGER-THREAD))
 
 (defn manager-stop 
@@ -39,6 +41,7 @@
   [job & [async]]
   (let [future (new FutureTask job)]
     (.addLast @WORK-Q future)
+    (info "manager-do got a job...")
     (if async
       future
       (.get future))))
