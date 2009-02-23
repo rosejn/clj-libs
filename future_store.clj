@@ -16,8 +16,6 @@
 ;;  rosejn (gmail)
 ;;  Created 15 November 2008
 
-(use 'clj-backtrace.repl)
-
 (ns future-store
   (:import (org.neo4j.api.core Direction
                                EmbeddedNeo
@@ -90,7 +88,6 @@
   `(binding [*store* (open-store ~path)]
      (try 
        (let [wg-result# (do ~@body)]
-         (comment info "with-store result: " wg-result#)
          wg-result#)
        (finally (close-graph *store*)))))
 
@@ -252,7 +249,6 @@
   (fn [edge] (= label (keyword (edge-label edge)))))
 
 (defn- get-edges [#^Node n #^Direction direction label]
-  ;(info "(get-edges " (get-id n) " " direction " " label ")")
   (check-tx 
     (let [edges (.getRelationships n direction)
                 filtered (if label
