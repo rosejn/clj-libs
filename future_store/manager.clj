@@ -4,7 +4,7 @@
              Callable 
              LinkedBlockingDeque
              FutureTask))
-  (:use future-store jlog))
+  (:use future-store.raw jlog))
 
 
 (def MANAGER-THREAD (ref nil))

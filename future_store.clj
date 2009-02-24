@@ -32,379 +32,127 @@
                                TraversalPosition
                                Traverser
                                Traverser$Order))
-  (:import (java.io File))
   (:use 
-     clojure.contrib.seq-utils 
+     (future-store raw manager utils) 
      jlog))
 
-(def BOTH Direction/BOTH)
-(def INCOMING Direction/INCOMING)
-(def OUTGOING Direction/OUTGOING)
+(def VIEWS (ref {}))
 
-(def BREADTH Traverser$Order/BREADTH_FIRST)
-(def DEPTH   Traverser$Order/DEPTH_FIRST)
-
-(def DEPTH-ONE StopEvaluator/DEPTH_ONE)
-(def END-OF-GRAPH StopEvaluator/END_OF_GRAPH)
-
-(def ALL ReturnableEvaluator/ALL)
-(def ALL-BUT-START ReturnableEvaluator/ALL_BUT_START_NODE)
-
-(defn open-store [path]
-  (info "(open-store " path ")")
-  (new EmbeddedNeo path))
-
-(defn close-graph [g]
-  (info "(close-graph)") 
-  (.shutdown g))
-
-(declare delete-dir)
-
-(defn delete-files [file-list]
-  (if (not (empty? file-list))
-    (let [f (first file-list)]
-      (if (.isDirectory f) (delete-dir f) (.delete f))
-      (recur (rest file-list)))))
-
-(defn delete-dir [dir]
-  (if (.exists dir)
-    (do 
-      (let [files (.listFiles dir)]
-        (delete-files files))
-      (.delete dir))))
-
-(defn delete-graph [path]
-  (info "(delete-graph " path ")")
-  (let [dir (new File path)]
-    (delete-dir dir)))
-
-(def *store* nil)
-(def *tx* nil)
-
-(defn success [] (.success *tx*))
-(defn failure [] (.failure *tx*))
-
-(defmacro with-store [ #^String path & body ]
-  `(binding [*store* (open-store ~path)]
-     (try 
-       (let [wg-result# (do ~@body)]
-         wg-result#)
-       (finally (close-graph *store*)))))
-
-(defmacro in-tx [& body]
-  `(binding [*tx* (.beginTx *store*)]
-     (try 
-       (let [tx-result# (do ~@body)]
-         tx-result#)
-       (catch Exception e# 
-         (do 
-           (warning "Exception in transaction [" *tx* "]: " e#)
-           (throw e#)))
-       (finally (.finish *tx*)))))
-
-;; Do the enclosing operations inside a transaction if they are not already
-;; being performed in an outer transaction created by the user.
-(defmacro check-tx [& body]
-  `(do 
-     (if (not *store*)
-       (throw (Exception. "Trying to perform a storage operationg without defining the current store.")))
-     (if *tx* 
-       (do ~@body)
-       (do (in-tx *store* 
-                  (let [ctx-result# (do ~@body)]
-                    (success)
-                    ctx-result#))))))
-
-(declare has-property?)
-(declare get-property)
-(declare set-property)
-(declare property-count)
-(declare get-properties)
-
-(defn wrap-entry [k v]
-  (proxy [clojure.lang.IMapEntry] []
-    (key [] k)
-    (val [] v)))
-
-(defn wrap-assoc [obj]
-  (proxy [clojure.lang.Associative] []
-    (count [] (property-count obj))
-    (seq   [] (get-properties obj))
-    (cons  [[k v]] (set-property obj k v))
-    (empty [] {}) ; Not sure what would make sense here...
-    (equiv [o] (and
-                 (= (class o) (class obj))
-                 (= (.getId o) (.getId obj))))
-    (containsKey [k] (has-property? obj k))
-    (entryAt     [k] (wrap-entry k (get-property obj k)))
-    (assoc       [k v] (do (set-property obj k v) (wrap-assoc obj)))
-    (valAt       ([k] (get-property obj k))
-                 ([k d] (if (has-property? obj k) 
-                          (get-property obj k)
-                          d)))))
-
-(defn root-node [] 
-  (check-tx (.getReferenceNode *store*)))
-
-(defn find-node [id]
-  (info "(find-node " id ")")
-  (check-tx 
-    (try 
-      (.getNodeById *store* id)
-      (catch NotFoundException e nil))))
-
-(defn find-edge [id]
-  (check-tx 
-    (try 
-      (.getRelationshipById *store* id)
-      (catch NotFoundException e nil))))
-
-(defn edge-label [e]
+(defn- create-view-root [label]
   (check-tx
-    (.name (.getType e))))
+    (let [root (root-node)
+          views (or (path-first root [:fs-views]) 
+                    (link-new root :fs-views))]
+      (if (path-first views [label])
+        (throw (IllegalArgumentException. (str "View already exists: " label))))
+      (let [node (link-new views label)]
+        (set-property node :id-counter 0)
+        node))))
 
-(defn edge-src [e]
-  (check-tx
-    (.getStartNode e)))
-
-(defn edge-tgt [e]
-  (check-tx
-    (.getEndNode e)))
-
-(defn get-id [obj]
-  (if (not (or (instance? Node obj)
-               (instance? Relationship obj)))
-    (throw 
-      (IllegalArgumentException. 
-        (str "Must pass either a Node or a Relationship (Edge) to get-id, got: " (class obj)))))
-  (.getId obj))
-
-(defn has-property? [obj key]
-  (check-tx (.hasProperty obj (str key))))
-
-(defn get-property [obj key]
-  (info "(get-property " (get-id obj) " " key ")")
-  (check-tx (.getProperty obj (str key))))
-
-(defn get-property-keys [obj]
-  (info "(get-property-keys " (get-id obj) ")")
-  (check-tx 
-    (seq (.getPropertyKeys obj))))
-
-(defn get-properties [obj]
-  (check-tx
-    (doall 
-      (map (fn [key]
-             [key (get-property obj key)])
-           (get-property-keys obj)))))
-
-(defn property-count [obj]
-  (count (get-property-keys obj)))
-
-(defn set-property [obj key value]
-  (info "(set-property " (get-id obj) " {" key " " value "})")
-  (check-tx (.setProperty obj (str key) value))
-  obj)
-
-; These should return lazy sequences sitting on top of the java iterators
-(defn all-nodes [])
-(defn all-edges [])
-
-; These might have to actually count, or else we might need to keep track of
-; the counts by hand if this is important, because I don't see a NEO method to
-; get these values.
-(defn node-count [])
-(defn edge-count [])
-
-(defn add-node [& [props]]
-  (info "(add-node " props ")")
-  (check-tx 
-    (let [n (.createNode *store*)]
-      (doseq [[k v] props] (set-property n k v))
+(defn view-root 
+  "Retrieve the root node for the named view.  The node will be created if it does not already exist."
+  [name]
+  (let [plural (keyword (:plural (get @VIEWS name)))
+        n      (path-first (root-node) [:fs-views plural])]
+    (if (nil? n)
+      (create-view-root plural)
       n)))
 
-(declare in-edges out-edges)
+(defn- view-next-id 
+  "Get the next auto-incrementing id for the given view root node."
+  [base]
+  (let [id (get-property base :id-counter)
+        next (+ id 1)]
+    (set-property base :id-counter next)
+    id))
 
-(defn remove-node [#^Node n]
-  (info "(remove-node " (get-id n) ")")
-  (try 
-    (check-tx 
-      ; Remove all edges pointing to and from this node
-      (doseq [edge (in-edges n)] (.delete edge))
-      (doseq [edge (out-edges n)] (.delete edge))
-      (.delete n))
-    true
-    (catch NotFoundException e false)))
-
-(defn edge-type [#^Keyword n]
-  (proxy [RelationshipType] [] (name [] (name n))))
-
-(defn add-edge [#^Node src #^Keyword label #^Node dest & [props]]
-  (info "(add-edge " (get-id src) " " label " " (get-id dest) " " props ")")
+(defn- view-instance 
+  "Create a new instance of the named view using props as the property values."  
+  [name props]
   (check-tx 
-    (let [edge (.createRelationshipTo src dest (edge-type label))]
-      (doseq [[k v] props] (set-property edge k v))
-      edge)))
+    (let [base (view-root name)
+          node (link-new base :instance)
+          id   (view-next-id base)]
+      (set-property node :id id)
+      (doseq [[k v] props]
+        (set-property node k v))
+      node)))
 
-(def link add-edge)
+(defn- view-all
+  "Get all instances of the given view."
+  [name]
+  (let [base (view-root name)]
+    (out-nodes base :instance)))
 
-(defn link-new [#^Node src #^Keyword label & [props]]
-  (info "(link-new " (get-id src) " " label " " props ")")
-  (check-tx 
-    (let [n (if props (add-node props) (add-node))]
-      (add-edge src label n)
-      n)))
+(defn- view-find 
+  "Find an instance based on the ID or by using a predicate that will be passed each instance node until the returns true."
+  [name arg]
+  (let [base (view-root name)
+        filter-fn (cond 
+                    (fn? arg) arg
+                    (integer? arg) #(= arg (get-property % :id)))]
+    (first (filter filter-fn 
+                   (out-nodes base :instance)))))
 
-(defn remove-edge [#^Relationship e]
-  (check-tx 
-    (.delete e)))
+(defn- view-delete 
+  "Delete a record using either the id or the node returned from find."
+  [name arg]
+  (let [node (cond
+               (integer? arg) (view-find name arg)
+               (instance? Node arg) arg)]
+    (remove-node node)))
 
-(defn- edge-filter [label]
-  ;(info "(edge-filter " label ")")
-  (fn [edge] (= label (keyword (edge-label edge)))))
+; TODO: Add index support 
+(defn create-view 
+"Creates a new view using the singular name."  
+  [singular & [args]]
+  (info "(create-view " singular args ")")
+  (let [plural (or (:plural args) (pluralize singular))
+        spec {:singular singular
+              :plural plural
+              :has-one (or (:has-one args) [])
+              :has-many (or (:has-one args) [])}]
+    (dosync
+      (ref-set VIEWS (assoc @VIEWS singular spec)))
+    {
+     :create (fn [props] (manager-do #(view-instance singular props)))
+     :all    (fn [] (manager-do #(view-all singular)))
+     :find   (fn [arg] (manager-do #(view-find singular arg)))
+     :delete (fn [arg] (manager-do #(view-delete singular arg)))
+     }))
 
-(defn- get-edges [#^Node n #^Direction direction label]
-  (check-tx 
-    (let [edges (.getRelationships n direction)
-                filtered (if label
-                           (doall (filter (edge-filter label) (seq edges)))
-                           (seq edges))]
-      ;(info "get-edges edges: " (count (seq edges)))
-      ;(info "get-edges filtered: " (count (seq filtered)))
-      (info "(get-edges " 
-            (get-id n) " " direction " " label ")"
-            " => " (count (seq edges)) " edges")
-      filtered)))
+(defmacro defview 
+"Defines a new view with the given name."  
+  [name & [args]]
+  (let [name (str name)
+        sym-name (symbol name)
+        ns-str (str (ns-name *ns*) "." name)
+        sym-ns (symbol ns-str)]
+    (info "(defview " name ") " 
+          " => " ns-str)
+    `(let [view-funs# (create-view ~name ~args)
+           view-ns#   (create-ns (symbol ~ns-str))]
+       (doseq [[fun-name# fun#] view-funs#]
+         (intern view-ns# (key-to-sym fun-name#) fun#))
+       (.addAlias *ns* (symbol ~name) view-ns#))))
 
-(defn in-edges [#^Node n & [label]]
-  (get-edges n INCOMING label))
+(defmacro view [full-name]
+"Import the named view's namespace into the current namespace for handy access."
+  (let [model-name (nth (re-find #".*\.(.*)" (str full-name)) 1)]
+    (info "(view " full-name ") => "  model-name)
+    `(.addAlias *ns* (symbol ~model-name) (find-ns ~full-name))))
 
-(defn out-edges [#^Node n & [label]]
-  (let [edges (get-edges n OUTGOING label)]
-    edges))
+(defn view-store 
+"Initializes future store and tells it to open or create the store located at path."  
+  [path]
+  (manager-start path))
 
-(defn in-nodes [#^Node n & [label]]
-  ;(info "(in-nodes " (get-id n) " " label ")")
-  (check-tx
-    (map #(.getStartNode %) (in-edges n label))))
-
-(defn out-nodes [#^Node n & [label]]
-  ;(info "(out-nodes " (get-id n) " " label ")")
-  (check-tx
-    (map #(.getEndNode %) (out-edges n label))))
-
-(defn path-query [#^Node start path]
-  (check-tx
-    (if (empty? path)
-      (do
-        start)
-      (let [label (keyword (first path))
-                  children (out-nodes start label)
-                  result (map #(path-query % (rest path)) children)]
-        (info "(path-query " (get-id start) " " path ")"
-              " => " result)
-        (flatten result)))))
-
-(defn path-first [#^Node start path]
-  (info "(path-first " (get-id start) " " path ")")
-  (first (path-query start path)))
-
-(defn out-degree [#^Node n]
-  (count (out-edges n)))
-
-(defn in-degree [#^Node n]
-  (count (in-edges n)))
-
-(defn dfs [#^Node start visitor]
-  (map visitor 
-       (seq (.iterator (.traverse start DEPTH END-OF-GRAPH 
-                                  ALL :link OUTGOING)))))
-
-(defn bfs [#^Node start visitor]
-  (map visitor 
-       (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
-                                  ALL :link OUTGOING)))))
-
-(defn- dot-nodes [nodes output & [options]]
-  (if (empty? nodes)
-    output
-    (let [node (first nodes)
-               name (if (has-property? node) 
-                      (get-property node :name) 
-                      (get-id node))]
-      (recur (rest nodes) (str output "\n\t\"" name "\"") options))))
-
-(defn- dot-edges [edges output & [options]]
-  (if (empty? edges)
-    output
-    (let [edge (first edges)
-               name (if (has-property? edge) 
-                      (get-property edge :name) 
-                      (get-id edge))
-               src  (edge-src edge)
-               tgt  (edge-tgt edge)]
-      (recur (rest edges) (str output "\n\t\"" name "\"") options))))
-
-(defn print-dot [nodes edges & [options]]
-  (in-tx
-    (let [name (or (:name options) "\"future-graph\"")
-               output (str "digraph " name " {\n" 
-                           (dot-nodes nodes nil options) "\n"
-                           (dot-edges edges nil options) "\n}\n")]
-      (success)
-      output)))
-
-;; Tests follow
-(use 'clojure.contrib.test-is)
-
-(defmacro test-store [& body]
-  `(try 
-     (with-store "test-store"
-       ~@body)
-     (finally (delete-graph "test-store"))))
-
-(deftest get-set-props []
-  (test-store
-    (set-property (root-node) "foo" 42)
-    (is (= 42 (get-property (root-node) "foo")))
-    (info (str "Properties: " (get-property-keys (root-node))))
-    (let [n (add-node {"bar" 1234})]
-      (info (str "Properties: " (get-property-keys n)))
-      (is (= 1234 (get-property n "bar"))))))
-
-(deftest add-remove []
-  (test-store
-    (let [n (add-node)
-          id (get-id n)]
-      (is (= id (get-id (find-node id))))
-      (remove-node n)
-      (is (nil? (find-node id))))))
-
-(defn n-children [parent n label]
-  (info "(n-children " (get-id parent) " " n " " label ")")
-  (if (zero? n)
-    parent
-    (do
-      (link-new parent label)
-      (recur parent (- n 1) label))))
-
-(deftest simple-query []
-  (test-store
-    (let [root (root-node)]
-      (in-tx 
-        (n-children 
-          (link-new (link-new (link-new (link-new root 
-                                                  :foo) :foo) :foo) :foo {"value" 42})
-          5
-          :bar)
-        (success))
-      (let [tgt (first (path-query root [:foo :foo :foo :foo]))
-            val (.getProperty tgt "value")
-            edge-count (count (out-edges tgt :bar))
-            spread-count (count (path-query root [:foo :foo :foo :foo :bar]))]
-        (info "simple-query tgt: " tgt)
-        (is (= 42 val))
-        (is (= 5 edge-count))
-        (is (= 5 spread-count))))))
-
-(defn fs-test [] (run-tests (find-ns 'future-store)))
+;; TODO:
+;; * relation helpers: create functions that handle the queries necessary 
+;;   for one-one and one-many relations in both directions.
+;; * properties: define the set of expected properties, with optional types 
+;;   and bounds
+;; * validation: attach validation functions to views that must pass 
+;;   before values are persisted to the DB
+;; * view inheritence: the child keeps all the properties and relations 
+;;   of it's parent's definition.
