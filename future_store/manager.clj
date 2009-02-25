@@ -1,46 +1,57 @@
 (ns future-store.manager
   (:import (java.util.concurrent 
-             Executors 
              Callable 
              LinkedBlockingDeque
-             FutureTask))
-  (:use future-store.raw jlog))
+             FutureTask
+             TimeUnit))
+  (:use future-store.raw jlog clj-backtrace.repl))
 
+(defmacro assoc! [map key value]
+  `(dosync (ref-set ~map (assoc (deref ~map) ~key ~value))))
 
-(def MANAGER-THREAD (ref nil))
-(def STORE-NAME     (ref nil))
-(def WORK-Q         (ref nil))
-(def RUNNING        (ref false))
+(defmacro rset! [ref value]
+  `(dosync (ref-set ~ref ~value)))
+
+(def MANAGER (ref nil))
+
+(def POLL-CYCLE 10) ; in ms
 
 (defn- job-processor []
-  (with-store @STORE-NAME
-    (while @RUNNING
-      (let [future (.takeFirst @WORK-Q)]
-        (info "processing job...")
-        (.run future)))))
+  (with-store (:store-path @MANAGER)
+    (info "(job-processor " (:store-path @MANAGER) ") => " future-store.raw/*store*)
+    (try 
+      (while (:running @MANAGER)
+             (let [job (.poll (:job-q @MANAGER) 10 TimeUnit/MILLISECONDS)]
+               (if (not (nil? job))
+                 (.run job))))
+      (catch Exception e
+        (println "Error processing a job in the store manager: " (pst-str e))))))
 
 (defn manager-start 
 "Start the storage manager to provide shared, single threaded access to the DB."
-  [store-name]
-  (dosync 
-      (ref-set WORK-Q (new LinkedBlockingDeque))
-      (ref-set STORE-NAME store-name)
-      (ref-set RUNNING true)
-      (ref-set MANAGER-THREAD (new Thread job-processor)))
-  (info "(manager-start " store-name ")")
-  (.start @MANAGER-THREAD))
+  [store-path]
+  (rset! MANAGER { 
+                 :running true
+                 :thread (new Thread job-processor "FS-Manager Thread")
+                 :store-path store-path
+                 :job-q (new LinkedBlockingDeque)
+                 })
+  (info "(manager-start " store-path")")
+  (.start (:thread @MANAGER)))
 
 (defn manager-stop 
-"Stop the storage manager, and optionally clear the pending job queue." 
-  [& [clear-jobs]]
-  (dosync (ref-set RUNNING false))
-  (if clear-jobs (.clear @WORK-Q)))
+"Stop the storage manager, and clear the pending job queue." 
+  []
+  (assoc! MANAGER :running false)
+  (.clear (:job-q @MANAGER))
+  (.join (:thread @MANAGER))
+  (rset! MANAGER nil))
 
 (defn manager-do 
-"Run the given Callable job in the manager thread.  By default this is a synchronous operation that will block until the job has completed, but if async is true a Future will be returned immediately representing the value."  
+"Run the given Callable job in the manager thread.  By default this is a synchronous operation that will block until the job has completed, but if async is true then a Future representing the eventual return value will be returned immediately."  
   [job & [async]]
   (let [future (new FutureTask job)]
-    (.addLast @WORK-Q future)
+    (.addLast (:job-q @MANAGER) future)
     (info "manager-do got a job...")
     (if async
       future

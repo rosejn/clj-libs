@@ -148,6 +148,7 @@
   (check-tx (.hasProperty obj (str key))))
 
 (defn get-property [obj key]
+  (info "#############get-property class: " (class obj))
   (info "(get-property " (get-id obj) " " key ")")
   (check-tx (.getProperty obj (str key))))
 
@@ -171,6 +172,7 @@
   (check-tx (.setProperty obj (str key) value))
   obj)
 
+(comment
 (defn wrap-entry [k v]
   (proxy [clojure.lang.IMapEntry] []
     (key [] k)
@@ -192,6 +194,7 @@
                  ([k d] (if (has-property? obj k) 
                           (get-property obj k)
                           d)))))
+)
 
 ; These should return lazy sequences sitting on top of the java iterators
 (defn all-nodes [])

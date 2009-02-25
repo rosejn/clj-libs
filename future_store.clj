@@ -38,6 +38,30 @@
 
 (def VIEWS (ref {}))
 
+(defn wrap-entry [k v]
+  (proxy [clojure.lang.IMapEntry] []
+    (key [] k)
+    (val [] v)))
+
+(defn wrap-assoc [obj]
+  (proxy [clojure.lang.Associative] []
+    (count [] (manager-do #(property-count obj)))
+    (seq   [] (manager-do #(get-properties obj)))
+    (cons  [[k v]] (manager-do #(set-property obj k v)))
+    (empty [] {}) ; Not sure what would make sense here...
+    (equiv [o] (and
+                 (= (class o) (class obj))
+                 (= (.getId o) (.getId obj))))
+    (containsKey [k] (manager-do #(has-property? obj k)))
+    (entryAt     [k] (wrap-entry k (manager-do #(get-property obj k))))
+    (assoc       [k v] (manager-do #(do (set-property obj k v) (wrap-assoc obj))))
+    (valAt       ([k] (if (or (= :node k) (= :edge k))
+                        obj
+                        (manager-do #(get-property obj k))))
+                 ([k d] (manager-do #(if (has-property? obj k) 
+                                       (get-property obj k))
+                                    d)))))
+
 (defn- create-view-root [label]
   (check-tx
     (let [root (root-node)
@@ -99,7 +123,7 @@
   [name arg]
   (let [node (cond
                (integer? arg) (view-find name arg)
-               (instance? Node arg) arg)]
+               (instance? clojure.lang.Associative arg) (:node arg))]
     (remove-node node)))
 
 ; TODO: Add index support 
@@ -115,9 +139,13 @@
     (dosync
       (ref-set VIEWS (assoc @VIEWS singular spec)))
     {
-     :create (fn [props] (manager-do #(view-instance singular props)))
-     :all    (fn [] (manager-do #(view-all singular)))
-     :find   (fn [arg] (manager-do #(view-find singular arg)))
+     :create (fn [props] (wrap-assoc (manager-do #(view-instance singular props))))
+     :all    (fn [] (map wrap-assoc (manager-do #(view-all singular))))
+     :find   (fn [arg] (let [result (manager-do #(view-find singular arg))]
+                         (cond
+                           (coll? result) (map wrap-assoc result)
+                           (nil? result) nil
+                           (instance? Node result) (wrap-assoc result))))
      :delete (fn [arg] (manager-do #(view-delete singular arg)))
      }))
 

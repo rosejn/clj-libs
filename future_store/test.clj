@@ -13,6 +13,18 @@
        ~@body)
      (finally (delete-store "test-store"))))
 
+
+(defmacro test-manager
+"Executes body within the context of a store named \"test-store\" that will be automatically deleted when body completes or an exception occurs."  
+  [& body]
+  `(try 
+     (view-store "test-store")
+       (do 
+         ~@body)
+     (finally (do
+                (manager-stop)
+                (delete-store "test-store")))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Raw tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -65,34 +77,35 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defview post)
 (deftest test-view []
-         (test-store 
-           (let [base    (view-root "post")
-                 counter (get-property base :id-counter)]
+         (test-manager
+           (let [base    (manager-do #(view-root "post"))
+                 counter (manager-do #(get-property base :id-counter))]
              (is (not (nil? base)))
              (is (= 0 counter))
              (let [new-post (post/create {:title "Peppernoten for life"
                                           :text  "Here we go..."})
-                   counter (get-property base :id-counter)]
-               (is (= 0 (get-property new-post :id)))
-               (is (= "Here we go..." (get-property new-post :text)))
+                   counter (manager-do #(get-property base :id-counter))
+                   new-id  (:id new-post)
+                   text    (:text new-post)
+                   post    (post/find 0)]
+               (is (= 0 new-id))
                (is (= 1 counter))
-               (is (= new-post (post/find 0)))))))
+               (is (= "Here we go..." text))
+               (is (= (:node new-post) (:node post)))))))
 
 (defview bam)
 (deftest test-view-find []
-         (test-store
+         (test-manager
            (dotimes [i 100]
-             (bam/create {:a i, :char (char (+ 65 i))}))
-           (is (= \A (get-property (bam/find 0) :char)))
-           (is (= \C (get-property (bam/find #(= \C (get-property % :char))) :char)))
-           (is (= 25 (get-property (bam/find #(= \Z (get-property % :char))) :a)))))
+             (bam/create {:num (* 10 i)}))
+             (is (= 20 (:num (bam/find 2))))))
 
 (defview bom)
 (deftest test-view-delete []
-         (test-store
+         (test-manager
            (bom/create {:val 1})
            (bom/create {:val 2})
-           (is (= 1 (get-property (bom/find 0) :val)))
+           (is (= 1 (:val (bom/find 0))))
            (bom/delete 0)
            (is (nil? (bom/find 0)))
            (bom/delete (bom/find 1))
@@ -102,6 +115,8 @@
 ;; Manager tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                                                         
+;; TODO: write some tests that slam the manager from a bunch of threads and
+;; test out weird border cases so we know it really does it's job.
                                                        
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Index tests
@@ -144,4 +159,6 @@
         (println "Raw time: " raw-time "\nIndex time: " index=-time)))))
 )                                                       
 
-(defn fs-tests [] (run-tests (find-ns 'future-store.test)))
+(defn fs-tests [] 
+  (run-tests (find-ns 'future-store.test))
+  (delete-store "test-store"))
