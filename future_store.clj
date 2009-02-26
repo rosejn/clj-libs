@@ -147,6 +147,10 @@
                            (nil? result) nil
                            (instance? Node result) (wrap-assoc result))))
      :delete (fn [arg] (manager-do #(view-delete singular arg)))
+     :has-one (fn [label & [type]]
+                (info "has-one " label))
+     :has-many (fn [label & [type]]
+                (info "has-many " label))
      }))
 
 (defmacro defview 
