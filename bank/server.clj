@@ -8,7 +8,8 @@
            (java.lang.reflect Modifier Method Constructor))
   (:use graph net
         [clojure.contrib.javalog :only (log)]))
-(def SERVER-PORT 4242)
+
+(def LISTENER-PORT 4242)
 
 (defn msg-handler [db msg resp] 
   (log :info "echoing msg: " msg)
@@ -16,5 +17,5 @@
 
 (defn start []
   (let [db  (graph :neo "account-database")
-        srv (net/server SERVER-PORT (partial msg-handler db))]
+        srv (net/listener LISTENER-PORT (partial msg-handler db))]
     srv))

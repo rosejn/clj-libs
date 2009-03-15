@@ -3,27 +3,7 @@
      jlog
      clojure.contrib.test-is
      future-store
-     (future-store raw manager)))
-
-(defmacro test-store 
-"Executes body within the context of a store named \"test-store\" that will be automatically deleted when body completes or an exception occurs."  
-  [& body]
-  `(try 
-     (with-store "test-store"
-       ~@body)
-     (finally (delete-store "test-store"))))
-
-
-(defmacro test-manager
-"Executes body within the context of a store named \"test-store\" that will be automatically deleted when body completes or an exception occurs."  
-  [& body]
-  `(try 
-     (view-store "test-store")
-       (do 
-         ~@body)
-     (finally (do
-                (manager-stop)
-                (delete-store "test-store")))))
+     (future-store raw manager utils)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Raw tests
@@ -72,13 +52,28 @@
         (is (= 5 edge-count))
         (is (= 5 spread-count))))))
 
+(defn build-tree [parent depth spread]
+  (if (> depth 1)
+    (dotimes [i spread]
+      (info "creating node...")
+      (build-tree (link-new parent :foo) (- depth 1) spread))))
+
+(deftest test-basic-iteration []
+  (test-store
+    (let [root (root-node)]
+      (in-tx 
+        (build-tree root 2 3)
+        (success))
+      (in-tx 
+        (is (= 4 (count (dfs root [:foo]))))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; View tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defview post)
 (deftest test-view []
          (test-manager
-           (let [base    (manager-do #(view-root "post"))
+           (let [base    (manager-do #(view-root "post" true))
                  counter (manager-do #(get-property base :id-counter))]
              (is (not (nil? base)))
              (is (= 0 counter))
@@ -97,8 +92,9 @@
 (deftest test-view-find []
          (test-manager
            (dotimes [i 100]
-             (bam/create {:num (* 10 i)}))
-             (is (= 20 (:num (bam/find 2))))))
+             (bam/create {:num (* 10 i) :foo "asdf" :baz i}))
+           (is (= 20 (:num (bam/find 2))))
+           (is (= 3 (:id (bam/find :num 30 :baz 3 :foo "asdf"))))))
 
 (defview bom)
 (deftest test-view-delete []
@@ -110,6 +106,12 @@
            (is (nil? (bom/find 0)))
            (bom/delete (bom/find 1))
            (is (nil? (bom/find 1)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Sub-graph tests
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Manager tests
@@ -162,3 +164,5 @@
 (defn fs-tests [] 
   (run-tests (find-ns 'future-store.test))
   (delete-store "test-store"))
+
+;(fs-tests)

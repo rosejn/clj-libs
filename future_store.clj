@@ -33,34 +33,41 @@
                                Traverser
                                Traverser$Order))
   (:use 
-     (future-store raw manager utils) 
+     (future-store raw utils) 
+     [future-store.manager :as manager]
      jlog))
 
 (def VIEWS (ref {}))
 
+; NOTE: property keys that start with ':' are turned into keywords...
 (defn wrap-entry [k v]
-  (proxy [clojure.lang.IMapEntry] []
-    (key [] k)
-    (val [] v)))
+  (let [k (if (.startsWith k ":") (keyword (.substring k 1)) k)]
+    (proxy [clojure.lang.IMapEntry] []
+      (key [] k) 
+      (getKey [] k)
+      (val [] v)
+      (getValue [] v))))
 
+; Wrap a node so that it implements the Associative interface
+; Note, the :node and :edge keys return the base Node or Relationship objects for internal use, but they will not be present when iterating over properties.
 (defn wrap-assoc [obj]
   (proxy [clojure.lang.Associative] []
-    (count [] (manager-do #(property-count obj)))
-    (seq   [] (manager-do #(get-properties obj)))
-    (cons  [[k v]] (manager-do #(set-property obj k v)))
+    (count [] (manager/do #(property-count obj)))
+    (seq   [] (map (fn [[k v]] (wrap-entry k v)) (manager/do #(get-properties obj))))
+    (cons  [[k v]] (manager/do #(set-property obj k v)))
     (empty [] {}) ; Not sure what would make sense here...
     (equiv [o] (and
                  (= (class o) (class obj))
                  (= (.getId o) (.getId obj))))
-    (containsKey [k] (manager-do #(has-property? obj k)))
-    (entryAt     [k] (wrap-entry k (manager-do #(get-property obj k))))
-    (assoc       [k v] (manager-do #(do (set-property obj k v) (wrap-assoc obj))))
+    (containsKey [k] (manager/do #(has-property? obj k)))
+    (entryAt     [k] (wrap-entry k (manager/do #(get-property obj k))))
+    (assoc       [k v] (manager/do #(do (set-property obj k v) (wrap-assoc obj))))
     (valAt       ([k] (if (or (= :node k) (= :edge k))
                         obj
-                        (manager-do #(get-property obj k))))
-                 ([k d] (manager-do #(if (has-property? obj k) 
-                                       (get-property obj k))
-                                    d)))))
+                        (manager/do #(get-property obj k))))
+           ([k d] (manager/do #(if (has-property? obj k) 
+                                 (get-property obj k))
+                              d)))))
 
 (defn- create-view-root [label]
   (check-tx
@@ -75,10 +82,14 @@
 
 (defn view-root 
   "Retrieve the root node for the named view.  The node will be created if it does not already exist."
-  [name]
-  (let [plural (keyword (:plural (get @VIEWS name)))
+  [name & [create-if-nil?]]
+  (let [create-if-nil? (if (or (nil? create-if-nil?) 
+                               (false? create-if-nil?)) 
+                         false 
+                         true)
+        plural (keyword (:plural (get @VIEWS name)))
         n      (path-first (root-node) [:fs-views plural])]
-    (if (nil? n)
+    (if (and create-if-nil? (nil? n))
       (create-view-root plural)
       n)))
 
@@ -94,7 +105,7 @@
   "Create a new instance of the named view using props as the property values."  
   [name props]
   (check-tx 
-    (let [base (view-root name)
+    (let [base (view-root name true)
           node (link-new base :instance)
           id   (view-next-id base)]
       (set-property node :id id)
@@ -106,60 +117,138 @@
   "Get all instances of the given view."
   [name]
   (let [base (view-root name)]
-    (out-nodes base :instance)))
+    (if (nil? base)
+      []
+      (out-nodes base :instance))))
+
+(defn- to-id [str]
+  (if (integer? str)
+    str
+    (new Integer (re-find #"[0-9]*" str))))
+
+(defn- id-str [str]
+  (re-find #"[0-9]*" str))
+
+(defn- id-str? [str]
+  (if (string? str)
+    (not (empty? (id-str str)))
+    false))
+
+(defn- prop-predicate [props]
+  (fn [node]
+    (every? (fn [[prop value]]
+              (= value (get-property node prop))) props)))
+
+; Returns a predicate function that expects to be passed a node or an edge.  
+; args can be either:
+;  integer id => (foo/find 42)
+;  string  id => (foo/find "42")
+;  property pairs => (foo/find :username "Jim" :email "jim@bar.com")
+;  filter fn  => (foo/find #(< 365 (get-property % :age)))
+(defn- find-predicate [args]
+  (let [arg (first args)]
+    (cond 
+      (integer? arg) #(= arg (to-id (get-property % :id)))
+      (id-str? arg)  #(= (to-id arg) (to-id (get-property % :id)))
+      (keyword? arg) (prop-predicate (apply hash-map args))
+      (fn? arg)      arg)))
 
 (defn- view-find 
   "Find an instance based on the ID or by using a predicate that will be passed each instance node until the returns true."
-  [name arg]
-  (let [base (view-root name)
-        filter-fn (cond 
-                    (fn? arg) arg
-                    (integer? arg) #(= arg (get-property % :id)))]
-    (first (filter filter-fn 
-                   (out-nodes base :instance)))))
+  [name & args]
+  (info "(view-find " name " " args ")\nclass: " (class (first args)))
+  (let [base (view-root name)]
+    (if (nil? base)
+      nil
+      (let [filter-fn (find-predicate args)]
+        (first (filter filter-fn 
+                       (out-nodes base :instance)))))))
+
+(defn- object-root [name arg]
+  (info "(object-root " name " " (id-str? arg) ")")
+  (cond
+    (associative? arg) (:node arg)
+    (or (integer? arg) (string? arg)) (view-find name arg)
+    true               (throw 
+                         (IllegalArgumentException. 
+                           (str "Could not find view using: " arg)))))
+
+(defn- view-update
+  "Update an instance with the given property values."
+  [name arg props]
+  (let [node (object-root name arg)]
+    (info "\n\n###############\nview-update: " arg ", " node "\n\n")
+    (doseq [[prop value] props]
+      (if (not= :id prop)
+        (set-property node prop value)))))
 
 (defn- view-delete 
   "Delete a record using either the id or the node returned from find."
   [name arg]
-  (let [node (cond
-               (integer? arg) (view-find name arg)
-               (instance? clojure.lang.Associative arg) (:node arg))]
+  (let [node (object-root name arg)]
     (remove-node node)))
+
+(defn- view-spec [vname]
+  (get @VIEWS vname))
+
+(defn- view-associations [vname]
+  (:associations (view-spec vname)))
+
+(defn- view-add-association [vname assoc]
+  (let [spec       (view-spec vname)
+        new-assocs (conj (:associations spec) assoc)]
+    (info "view-add-association - spec: "
+          spec "\n new-assoc:\n"
+          new-assocs)
+    ;    new-spec   (assoc spec :associations new-assocs)]
+    (comment dosync (ref-set VIEWS 
+                     (assoc @VIEWS vname new-spec)))))
+
+(defn- view-has-one [vname target & [type]]
+  (let [type (or type target)]
+    (view-add-association vname [:has-one target type])))
+
+(defn- view-has-many [vname target & [type]]
+  (let [type (or type target)]
+    (view-add-association vname [:has-many target type])))
 
 ; TODO: Add index support 
 (defn create-view 
-"Creates a new view using the singular name."  
+  "Creates a new view using the singular name."  
   [singular & [args]]
-  (info "(create-view " singular args ")")
+  (info "(create-view " singular " " args ")")
   (let [plural (or (:plural args) (pluralize singular))
         spec {:singular singular
               :plural plural
-              :has-one (or (:has-one args) [])
-              :has-many (or (:has-one args) [])}]
+              :associations []
+              }]
     (dosync
       (ref-set VIEWS (assoc @VIEWS singular spec)))
     {
-     :create (fn [props] (wrap-assoc (manager-do #(view-instance singular props))))
-     :all    (fn [] (map wrap-assoc (manager-do #(view-all singular))))
-     :find   (fn [arg] (let [result (manager-do #(view-find singular arg))]
-                         (cond
-                           (coll? result) (map wrap-assoc result)
-                           (nil? result) nil
-                           (instance? Node result) (wrap-assoc result))))
-     :delete (fn [arg] (manager-do #(view-delete singular arg)))
+     :create (fn [props] (wrap-assoc (manager/do #(view-instance singular props))))
+     :update (fn [arg props] (wrap-assoc (manager/do 
+                                       #(view-update singular arg props))))
+     :all    (fn [] (map wrap-assoc (manager/do #(view-all singular))))
+     :find   (fn [& args] 
+               (let [result (manager/do #(apply view-find singular args))]
+                 (cond
+                   (coll? result) (map wrap-assoc result)
+                   (nil? result) nil
+                   (instance? Node result) (wrap-assoc result))))
+     :delete (fn [arg] (manager/do #(view-delete singular arg)))
      :has-one (fn [label & [type]]
-                (info "has-one " label))
+                (view-has-one singular label type))
      :has-many (fn [label & [type]]
-                (info "has-many " label))
+                 (view-has-many label type))
      }))
 
 (defmacro defview 
-"Defines a new view with the given name."  
+  "Defines a new view with the given name."  
   [name & [args]]
-  (let [name (str name)
+  (let [name     (str name)
         sym-name (symbol name)
-        ns-str (str (ns-name *ns*) "." name)
-        sym-ns (symbol ns-str)]
+        ns-str   (str (ns-name *ns*) "." name)
+        sym-ns   (symbol ns-str)]
     (info "(defview " name ") " 
           " => " ns-str)
     `(let [view-funs# (create-view ~name ~args)
@@ -169,15 +258,16 @@
        (.addAlias *ns* (symbol ~name) view-ns#))))
 
 (defmacro view [full-name]
-"Import the named view's namespace into the current namespace for handy access."
-  (let [model-name (nth (re-find #".*\.(.*)" (str full-name)) 1)]
-    (info "(view " full-name ") => "  model-name)
-    `(.addAlias *ns* (symbol ~model-name) (find-ns ~full-name))))
+  "Import the named view's namespace into the current namespace for handy access."
+  (let [str-name (str (eval full-name))
+        model-name (nth (re-find #".*\.(.*)" str-name) 1)]
+     (info "(view " str-name ") => "  model-name "\n")
+    `(.addAlias *ns* (symbol ~model-name) (find-ns (symbol ~str-name)))))
 
 (defn view-store 
-"Initializes future store and tells it to open or create the store located at path."  
+  "Initializes future store and tells it to open or create the store located at path."  
   [path]
-  (manager-start path))
+  (manager/start path))
 
 ;; TODO:
 ;; * relation helpers: create functions that handle the queries necessary 

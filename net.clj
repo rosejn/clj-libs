@@ -48,23 +48,23 @@
                          (try-handler handlers :on-error cause) 
                          (.close (.getChannel event)))))))
 
-; The monitor is just a separate thread that periodically gathers some data
-; about the status of the server channels.   
+; The monitor is a separate thread that periodically gathers some data
+; about the status of the listener channels.   
 ; TODO: have a generic periodic logging system connected to the monitor
-(defn throughput-monitor [who]
+(defn throughput-monitor [name handler]
   (proxy [Thread] []
     (run [] 
          (loop []
            (Thread/sleep 3000) 
-           (println who "is alive...")
+           (log :info name ": " (.getTransferredBytes handler) "bytes transferred...")
            (recur)))))
 
-(def DEFAULT-SERVER-ADDR "localhost")
+(def DEFAULT-listener-ADDR "localhost")
 
-(defstruct net-server :type :channel :monitor)
+(defstruct net-listener :type :channel :monitor)
 
-(defn make-net-server [channel monitor] 
-  (struct net-server :server channel monitor))
+(defn make-net-listener [channel monitor] 
+  (struct net-listener :listener channel monitor))
 
 (defn setup-object-pipeline [pipeline]
   (log :info "Setting up an object encode/decode pipeline...")
@@ -80,27 +80,27 @@
                    (assoc handlers :on-open setup-object-pipeline))]
     handlers))
 
-(defn server 
-  ([port-num handler-or-hash]
+(defn listener
+  [port-num handler-or-hash]
              (let [chan-factory (new NioServerSocketChannelFactory
                                      (Executors/newCachedThreadPool)
                                      (Executors/newCachedThreadPool))
                    bootstrap (new ServerBootstrap chan-factory)
                    handlers (setup-handlers handler-or-hash)
                    handler (generic-handler handlers)
-                   monitor (throughput-monitor "server")
+                   monitor (throughput-monitor "listener" handler)
                    p (.getPipeline bootstrap)]
                (.setOption bootstrap "child.tcpNoDelay" true)
                (.setOption bootstrap "child.keepAlive" true)
                (.addLast p "handler" handler)
                ;(.start monitor)
-               (make-net-server 
+               (make-net-listener 
                  (.bind bootstrap (new InetSocketAddress port-num))
-                 monitor))))
+                 monitor)))
 
 (defmulti close :type)
 
-(defmethod close :server 
+(defmethod close :listener 
   ([s] (.close s))
   ([s async] 
       (let [future (.close s)]

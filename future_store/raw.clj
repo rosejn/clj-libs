@@ -25,7 +25,6 @@
                                TraversalPosition
                                Traverser
                                Traverser$Order))
-  (:import (java.io File))
   (:use 
      clojure.contrib.seq-utils 
      jlog))
@@ -50,26 +49,6 @@
 (defn close-store [s]
   (info "(close-store)") 
   (.shutdown s))
-
-(declare delete-dir)
-
-(defn delete-files [file-list]
-  (if (not (empty? file-list))
-    (let [f (first file-list)]
-      (if (.isDirectory f) (delete-dir f) (.delete f))
-      (recur (rest file-list)))))
-
-(defn delete-dir [dir]
-  (if (.exists dir)
-    (do 
-      (let [files (.listFiles dir)]
-        (delete-files files))
-      (.delete dir))))
-
-(defn delete-store [path]
-  (info "(delete-store " path ")")
-  (let [dir (new File path)]
-    (delete-dir dir)))
 
 (def *store* nil)
 (def *tx* nil)
@@ -148,7 +127,6 @@
   (check-tx (.hasProperty obj (str key))))
 
 (defn get-property [obj key]
-  (info "#############get-property class: " (class obj))
   (info "(get-property " (get-id obj) " " key ")")
   (check-tx (.getProperty obj (str key))))
 
@@ -290,7 +268,7 @@
         start)
       (let [label (keyword (first path))
                   children (out-nodes start label)
-                  result (map #(path-query % (rest path)) children)]
+                  result (doall (map #(path-query % (rest path)) children))]
         (info "(path-query " (get-id start) " " path ")"
               " => " result)
         (flatten result)))))
@@ -305,12 +283,25 @@
 (defn in-degree [#^Node n]
   (count (in-edges n)))
 
-(defn dfs [#^Node start visitor]
-  (map visitor 
-       (seq (.iterator (.traverse start DEPTH END-OF-GRAPH 
-                                  ALL :link OUTGOING)))))
+(defn jcall [obj name & args]
+  (clojure.lang.Reflector/invokeInstanceMethod obj (str name)
+    (if args (to-array args) clojure.lang.RT/EMPTY_ARRAY)))
 
-(defn bfs [#^Node start visitor]
-  (map visitor 
-       (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
-                                  ALL :link OUTGOING)))))
+(defn jfn [name]
+  #(apply jcall %1 name %&))
+
+;((jfn 'substring) "fred" 2 3)
+;((jfn 'toUpperCase) "fred") 
+
+; TODO: Figure out how to do these without these annoying 
+; relationship type-constraints on which edges we can traverse...
+; - maybe we can use custom iterator functions?
+(defn dfs [#^Node start labels]
+  (let [rel-types (doall (mapcat (fn [label] [(edge-type label) OUTGOING]) labels))]
+    (println "dfs labels: " rel-types)
+    (seq (.iterator (apply (jfn 'traverse) start DEPTH END-OF-GRAPH 
+                               ALL rel-types)))))
+
+(defn bfs [#^Node start]
+  (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
+                             ALL (edge-type :link) OUTGOING))))

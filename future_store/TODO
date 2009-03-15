@@ -1,0 +1,24 @@
+* UUIDs for nodes and edges w/ a UUID index for each (sub-)graph
+ - b-tree index over :uuid property
+ - look into supporting versioning and persistence on property modifications
+
+* represent sub-graphs by building UUID index roots to hold all entities (just node?)
+
+* Support human readable named entities
+ - root node holds a name node that maintains b-tree index over :fs-name property
+
+* sub-protocol registration to support various URL types
+
+* node aliases are akin to distributed, symbolic links
+ - hold the full path/URL to their target
+
+* build a graph->json converter and try sending simple graphs between a client and server
+
+* implement some node proxy functionality, where a node holds a URL for a remote node
+  - alternate protocols
+  - port numbers
+  - public keys
+  - trust/reputation information
+  - how can this be a pluggable mechanism?
+  - replicas: alternate nodes that satisfy this proxy node's capability
+

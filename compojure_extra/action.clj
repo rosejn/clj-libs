@@ -1,4 +1,5 @@
-(ns compojure-extra.action)
+(ns compojure-extra.action
+  (:use compojure.html))
 
 (defonce CONTROLLER-BASE (ref nil))
 

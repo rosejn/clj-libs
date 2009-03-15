@@ -10,6 +10,7 @@
 ;;  Created 23 Feb 2009
 
 (ns future-store.utils
+  (:import (java.io File))
   (:import (org.jvnet.inflector Noun)))
 
 (defn- keyword-to-str 
@@ -26,4 +27,42 @@
   (if how-many
     (Noun/pluralOf singular how-many)
     (Noun/pluralOf singular)))
+
+(declare delete-dir)
+
+(defn- delete-files [file-list]
+  (if (not (empty? file-list))
+    (let [f (first file-list)]
+      (if (.isDirectory f) (delete-dir f) (.delete f))
+      (recur (rest file-list)))))
+
+(defn- delete-dir [dir]
+  (if (.exists dir)
+    (do 
+      (let [files (.listFiles dir)]
+        (delete-files files))
+      (.delete dir))))
+
+(defn delete-store [path]
+  (let [dir (new File path)]
+    (delete-dir dir)))
+
+(defmacro test-store 
+"Executes body within the context of a store named \"test-store\" that will be automatically deleted when body completes or an exception occurs."  
+  [& body]
+  `(try 
+     (future-store.raw/with-store "test-store"
+       ~@body)
+     (finally (delete-store "test-store"))))
+
+(defmacro test-manager
+"Executes body within the context of a store named \"test-store\" that will be automatically deleted when body completes or an exception occurs."  
+  [& body]
+  `(try 
+     (future-store/view-store "test-store")
+       (do 
+         ~@body)
+     (finally (do
+                (future-store.manager/manager-stop)
+                (delete-store "test-store")))))
 
