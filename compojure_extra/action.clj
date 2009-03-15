@@ -88,7 +88,8 @@
 (defmacro base-action 
 "This is used in the servlet route-table to lookup actions and call them with the correct arguments."  
   [controller & [action]]
-  `(let [vars# {:context  ~'context 
+  `(let [vars# {:request  ~'request
+                :context  ~'context 
                 :method   ~'method  
                 :url      ~'url     
                 :path     ~'path    

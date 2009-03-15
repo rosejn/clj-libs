@@ -23,7 +23,6 @@
   (let [job 
         (.take (:job-q @MANAGER))
         ]
-    (info "$$$$$$$$$$ next-job: " job)
     job))
 
 (defn- job-processor []
@@ -76,7 +75,6 @@
   [job & [async]]
   (let [future (new FutureTask job)]
     (.addLast (:job-q @MANAGER) future)
-    (info "manager-do got a job...")
     (if async
       future
       (.get future))))
