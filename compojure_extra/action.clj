@@ -33,16 +33,17 @@
     (symbol val)))
 
 (defn action-handler 
-"Lookup a handler function given the controller and action names." 
+"Lookup a handler function given the controller and action names. 
+  - returns nil if no handler is located."
   [controller action]
   (let [controller (make-str controller)
         action (if action 
                  (make-sym action) 
                  'index)
-        handler (get 
-                  (ns-publics (symbol (str @CONTROLLER-BASE controller))) 
-                  action)]
-    handler))
+        ns-name (symbol (str @CONTROLLER-BASE controller))]
+    (if-let [action-ns (find-ns ns-name)]
+      (get (ns-publics action-ns) action)
+      nil)))
 
 (defn action 
 "Run an action handler given the controller and optional action name.  If no action was specified then it will call the 'index' action."  
