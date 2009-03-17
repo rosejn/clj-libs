@@ -85,7 +85,29 @@
      (html ~@body)
      ~@body))
 
-(defmacro base-action 
+(def session)
+(def headers)
+(def params)
+(def cookies)
+
+(defn base-action [heads pars sesh cooks controller & [action]]
+  (binding [session sesh
+            headers heads
+            params  pars
+            cookies cooks]
+    ;(println "(base-action " controller " " action ")")
+    ;(println "\n\n***\naction info: " session params headers)
+
+    (let [handler (action-handler controller action)]
+      (if (nil? handler)
+        (throw (Exception. (str "Invalid controller or action requested: " controller action)))
+
+      (let [response (handler)]
+        (if (not (string? response))
+          (html response)
+          response))))))
+
+(defmacro old-action 
 "This is used in the servlet route-table to lookup actions and call them with the correct arguments."  
   [controller & [action]]
   `(let [vars# {:request  ~'request
@@ -98,6 +120,6 @@
                 :mimetype ~'mimetype
                 :session  ~'session 
                 :cookies  ~'cookies}
-         handler# (action-handler ~(do controller) ~(do action))]
+           handler# (action-handler ~(do controller) ~(do action))]
      (ajax-html ~'headers
        (apply handler# (build-args handler# vars#)))))

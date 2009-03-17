@@ -6,7 +6,7 @@
      javax.crypto.spec.SecretKeySpec))
 
 
-(def- ENCODE-TABLE "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+(def ENCODE-TABLE "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
 
 (defn- encode-num
   [num]
@@ -31,12 +31,12 @@
           (lazy-cat (encode-num num) (base64-encode (drop 3 s))))
         (padding x)))))
 
-(def- MAC-TYPE "HmacSHA1")
+(def MAC-TYPE "HmacSHA1")
 
 (defn- hmac-signature 
   [secret-key data]
   (let [key (new SecretKeySpec (.getBytes secret-key) MAC-TYPE)
-        mac (.getInstance Mac MAC-TYPE)]
+        mac (Mac/getInstance MAC-TYPE)]
     (.init mac key)
     (base64-encode 
       (.doFinal mac (.getBytes data)))))
@@ -60,5 +60,5 @@
 
 (defn sign-request 
   [key request]
-  (hmac-signature key (build-signature-str request)))
+  (apply str "" (seq (hmac-signature key (build-signature-str request)))))
 
