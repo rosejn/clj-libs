@@ -24,7 +24,7 @@
   (dosync (ref-set graph-stores (assoc @graph-stores key store-fn))))
 
 (defn graph 
-  ([] (graph :neo))
+  ([] (graph :hlist))
   ([store-key & args] (apply (store-key @graph-stores) args)))
 
 (defmulti get-root    :graph-store)
@@ -66,8 +66,7 @@
             ;(map (nodes g))))
             (pr-str "}")))
 
-;(use 'graph.hlist)
-(use 'graph.neo)
+(use 'graph.hlist)
 
 (defn reload []
 ;  (require '(graph hlist neo) :reload-all))
@@ -97,16 +96,3 @@
         graph
         (recur (remove-node graph (first uuids))
                (rest uuids))))))
-
-(deftest add-remove-neo []
-  (neo4j/tx 
-    (let [g (graph :neo "db")]
-      (neo4j/success))))
-
-;          added (add-n g 100)
-;          nc1 (node-count added)
-;          removed (remove-n g 50)
-;          nc2 (node-count removed)]
-;      (is (= 50 (- nc1 nc2))))))
-
-(defn test-neo [] (run-tests (find-ns 'graph)))
