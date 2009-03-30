@@ -2,7 +2,9 @@
   (:use (future-store raw builder utils graphml))
   (:import 
     java.io.StringReader
-    javax.swing.JFrame
+    (javax.swing JFrame JPanel JLabel JTextField JButton)
+    (java.awt.event ActionListener)
+    (java.awt GridLayout)
     (prefuse Constants Display Visualization)
     (prefuse.action ActionList RepaintAction)
     (prefuse.action.assignment ColorAction DataColorAction)
@@ -25,6 +27,26 @@
   (print-gxml ["name"])
   (with-out-str (print-gxml ["name" "foo"])))
 
+(defn save-pdf [frame path]
+  (let [width (.getWidth frame)
+        height (.getHeight frame)
+        doc (new com.lowagie.text.Document)
+        file (new java.io.FileOutputStream path)
+        writer (com.lowagie.text.pdf.PdfWriter/getInstance doc file)]
+    (.open doc)
+    (let [cb (.getDirectContent writer)
+          tp (.createTemplate cb width height)
+          g2d (.createGraphics tp width height)
+          r2d (new java.awt.geom.Rectangle2D$Double 0 0 width height)]
+      (.setColor g2d java.awt.Color/WHITE)
+      (.fill g2d (.getBounds frame))
+      (.print frame g2d)
+      (.setColor g2d java.awt.Color/BLACK)
+      (.draw g2d (.getBounds frame))
+      (.dispose g2d)
+      (.addTemplate cb tp 30 300)
+      (.close doc))))
+
 (defn draw-graph [g]
   (println "Drawing Graph: \n\n" g "\n\n")
   (let [reader (new GraphMLReader)
@@ -38,7 +60,7 @@
                   (.addControlListener (new DragControl))
                   (.addControlListener (new PanControl))
                   (.addControlListener (new ZoomControl)))
-        frame (doto (new JFrame "future-store basic")
+        panel (doto (new JPanel)
                 ;(.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
                 (.add display))
         lr    (doto (new LabelRenderer "foo")
@@ -60,13 +82,25 @@
     (.setRendererFactory viz (new DefaultRendererFactory lr))
     (.putAction viz "color" color)
     (.putAction viz "layout" layout)
-    
-    (.pack frame)
-    (.setVisible frame true)
-
     (.run viz "color")
-    (.run viz "layout")))
+    (.run viz "layout")
+    panel))
 
 (defn goviz []
   (test-store 
-    (draw-graph (make-graph))))
+    (let [graph (make-graph)
+          g-panel (draw-graph graph)
+          app-frame (JFrame. "Future Store - Visualization")
+          pdf-button (JButton. "Save to PDF")]
+      (.addActionListener pdf-button
+        (proxy [ActionListener] []
+          (actionPerformed [evt] (save-pdf g-panel "test.pdf"))))
+    (doto app-frame
+      (.setLayout (GridLayout. 2 1 3 3))
+      (.add g-panel)
+      (.add pdf-button)
+      ;(.setSize 300 80)
+      (.pack)
+      (.setVisible true)))))
+
+

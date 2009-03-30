@@ -9,7 +9,7 @@
 ;;  rosejn (gmail)
 ;;  Created 23 February 2009
 
-(ns future-store.graph-xml
+(ns future-store.graphml
   (:use future-store future-store.raw))
 
 (defn gxml-edges [edges]
