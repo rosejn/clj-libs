@@ -4,7 +4,7 @@
      clojure.contrib.test-is
      future-store
      [future-store.manager :as manager]
-     (future-store raw utils dot)))
+     (future-store raw builder utils dot)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Raw tests
@@ -25,14 +25,6 @@
       (is (= id (get-id (find-node id))))
       (remove-node n)
       (is (nil? (find-node id))))))
-
-(defn n-children [parent n label]
-  (info "(n-children " (get-id parent) " " n " " label ")")
-  (if (zero? n)
-    parent
-    (do
-      (link-new parent label)
-      (recur parent (- n 1) label))))
 
 (deftest ins-and-outs []
   (test-store
@@ -69,12 +61,6 @@
         (is (= 42 val))
         (is (= 5 edge-count))
         (is (= 5 spread-count))))))
-
-(defn build-tree [parent depth spread label]
-  (if (> depth 1)
-    (dotimes [i spread]
-      (info "creating node...")
-      (build-tree (link-new parent label) (- depth 1) spread label))))
 
 (deftest test-basic-iteration []
   (test-store

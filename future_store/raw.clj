@@ -128,11 +128,11 @@
   (check-tx (.hasProperty obj (str key))))
 
 (defn get-property [obj key]
-  (info "(get-property " (get-id obj) " " key ")")
+  ;(info "(get-property " (get-id obj) " " key ")")
   (check-tx (.getProperty obj (str key))))
 
 (defn get-property-keys [obj]
-  (info "(get-property-keys " (get-id obj) ")")
+  ;(info "(get-property-keys " (get-id obj) ")")
   (check-tx 
     (seq (.getPropertyKeys obj))))
 
@@ -147,7 +147,7 @@
   (count (get-property-keys obj)))
 
 (defn set-property [obj key value]
-  (info "(set-property " (get-id obj) " {" key " " value "})")
+  ;(info "(set-property " (get-id obj) " {" key " " value "})")
   (check-tx (.setProperty obj (str key) value))
   obj)
 
@@ -195,7 +195,7 @@
 (defn edge-count [])
 
 (defn add-node [& [props]]
-  (info "(add-node " props ")")
+  ;(info "(add-node " props ")")
   (check-tx 
     (let [n (.createNode *store*)]
       (doseq [[k v] props] (set-property n k v))
@@ -204,7 +204,7 @@
 (declare in-edges out-edges)
 
 (defn remove-node [#^Node n]
-  (info "(remove-node " (get-id n) ")")
+  ;(info "(remove-node " (get-id n) ")")
   (try 
     (check-tx 
       ; Remove all edges pointing to and from this node
@@ -218,7 +218,7 @@
   (proxy [RelationshipType] [] (name [] (name n))))
 
 (defn add-edge [#^Node src #^Keyword label #^Node dest & [props]]
-  (info "(add-edge " (get-id src) " " label " " (get-id dest) " " props ")")
+  ;(info "(add-edge " (get-id src) " " label " " (get-id dest) " " props ")")
   (check-tx 
     (let [edge (.createRelationshipTo src dest (edge-type label))]
       (doseq [[k v] props] (set-property edge k v))
@@ -227,7 +227,7 @@
 (def link add-edge)
 
 (defn link-new [#^Node src #^Keyword label & [props]]
-  (info "(link-new " (get-id src) " " label " " props ")")
+  ;(info "(link-new " (get-id src) " " label " " props ")")
   (check-tx 
     (let [n (if props (add-node props) (add-node))]
       (add-edge src label n)
@@ -248,9 +248,9 @@
                      (doall (filter label-filter edges)))]
       ;(info "get-edges edges: " (count (seq edges)))
       ;(info "get-edges filtered: " (count (seq filtered)))
-      (info "(get-edges " 
-            (get-id n) " " direction " " labels ")"
-            " => " (count (seq edges)) " edges")
+      ;(info "(get-edges " 
+      ;      (get-id n) " " direction " " labels ")"
+      ;      " => " (count (seq edges)) " edges")
       filtered)))
 
 (defn in-edges [#^Node n & labels]

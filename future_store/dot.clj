@@ -45,4 +45,3 @@
       (success)
       output)))
 
-(defn to-gif

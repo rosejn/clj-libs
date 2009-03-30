@@ -10,13 +10,22 @@
 ;;  Created 23 Feb 2009
 
 (ns future-store.builder
-  (:use future-store))
+  (:use future-store.raw))
 
+(defn n-children [parent n label]
+  (if (zero? n)
+    parent
+    (do
+      (link-new parent label)
+      (recur parent (- n 1) label))))
 
 (defn create_path [root edge-list]
   (if (empty? edge-list)
     root
-    (recur (link-new root (first edge-list)))))
+    (recur (link-new root (first edge-list)) (rest edge-list))))
 
-(defn create_tree [root depth spread & [labels]]
-)
+(defn build-tree [parent depth spread label]
+  (if (> depth 1)
+    (dotimes [i spread]
+      (build-tree (link-new parent label) (- depth 1) spread label))))
+
