@@ -3,7 +3,8 @@
      jlog
      clojure.contrib.test-is
      future-store
-     (future-store raw manager utils)))
+     [future-store.manager :as manager]
+     (future-store raw utils dot)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Raw tests
@@ -33,6 +34,23 @@
       (link-new parent label)
       (recur parent (- n 1) label))))
 
+(deftest ins-and-outs []
+  (test-store
+    (let [root (root-node)]
+      (in-tx
+        (do
+          (n-children (root-node) 5 :foo)
+          (n-children root 3 :bar)
+          (n-children root 2 :baz))
+        (success))
+      (println (print-dot))
+      (is (= 11 (count (all-nodes))))
+      (is (= 10 (count (all-edges))))
+      (is (= 10 (count (out-edges root))))
+      (is (= 3 (count (out-nodes root :bar))))
+      (is (= 7 (count (out-nodes root :foo :baz))))
+      (is (= 1 (count (in-nodes (first (out-nodes root)))))))))
+
 (deftest simple-query []
   (test-store
     (let [root (root-node)]
@@ -52,20 +70,33 @@
         (is (= 5 edge-count))
         (is (= 5 spread-count))))))
 
-(defn build-tree [parent depth spread]
+(defn build-tree [parent depth spread label]
   (if (> depth 1)
     (dotimes [i spread]
       (info "creating node...")
-      (build-tree (link-new parent :foo) (- depth 1) spread))))
+      (build-tree (link-new parent label) (- depth 1) spread label))))
 
 (deftest test-basic-iteration []
   (test-store
     (let [root (root-node)]
       (in-tx 
-        (build-tree root 2 3)
+        (build-tree root 3 3 :foo)
+        (build-tree root 3 3 :bar)
         (success))
-      (in-tx 
-        (is (= 4 (count (dfs root [:foo]))))))))
+      (with-local-vars [all-count 0
+                        foo-bar-count 0
+                        foo-count 0]
+        (in-tx 
+          (dfs root 
+               (fn [_] (var-set all-count (inc (var-get all-count)))))
+          (dfs root [:foo] 
+               (fn [_] (var-set foo-count (inc (var-get foo-count)))))
+          (dfs root [:foo :bar] 
+               (fn [_] (var-set foo-bar-count (inc (var-get foo-bar-count)))))
+          (is (= 25 (var-get all-count)))
+          (is (= 13 (var-get foo-count)))
+          (is (= 25 (var-get foo-bar-count)))
+          )))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; View tests
@@ -73,13 +104,13 @@
 (defview post)
 (deftest test-view []
          (test-manager
-           (let [base    (manager-do #(view-root "post" true))
-                 counter (manager-do #(get-property base :id-counter))]
+           (let [base    (manager/do #(view-root "post" true))
+                 counter (manager/do #(get-property base :id-counter))]
              (is (not (nil? base)))
              (is (= 0 counter))
              (let [new-post (post/create {:title "Peppernoten for life"
                                           :text  "Here we go..."})
-                   counter (manager-do #(get-property base :id-counter))
+                   counter (manager/do #(get-property base :id-counter))
                    new-id  (:id new-post)
                    text    (:text new-post)
                    post    (post/find 0)]
@@ -107,6 +138,21 @@
            (bom/delete (bom/find 1))
            (is (nil? (bom/find 1)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Validation tests
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                
+(comment defview person {:name  [:string :unique]
+                 :email [:string true]
+                 :created-on})
+
+(comment deftest test-basic-validations []
+         (test-manager
+           (dotimes [i 100]
+             (bam/create {:num (* 10 i) :foo "asdf" :baz i}))
+           (is (= 20 (:num (bam/find 2))))
+           (is (= 3 (:id (bam/find :num 30 :baz 3 :foo "asdf"))))))
+                                                
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Sub-graph tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

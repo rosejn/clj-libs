@@ -26,6 +26,7 @@
                                Traverser
                                Traverser$Order))
   (:use 
+     clojure.set
      clojure.contrib.seq-utils 
      jlog))
 
@@ -174,9 +175,18 @@
                           d)))))
 )
 
+(declare dfs)
+
 ; These should return lazy sequences sitting on top of the java iterators
-(defn all-nodes [])
-(defn all-edges [])
+(defn all-nodes []
+  (with-local-vars [nodes (list)]
+    (dfs (root-node)
+         (fn [node] (var-set nodes (conj (var-get nodes) node))))
+    (var-get nodes)))
+
+(declare out-edges)
+(defn all-edges []
+  (apply concat (map out-edges (all-nodes))))
 
 ; These might have to actually count, or else we might need to keep track of
 ; the counts by hand if this is important, because I don't see a NEO method to
@@ -227,39 +237,37 @@
   (check-tx 
     (.delete e)))
 
-(defn- edge-filter [label]
-  ;(info "(edge-filter " label ")")
-  (fn [edge] (= label (keyword (edge-label edge)))))
-
-(defn- get-edges [#^Node n #^Direction direction label]
+(defn- get-edges [#^Node n #^Direction direction labels]
   (check-tx 
-    (let [edges (.getRelationships n direction)
-                filtered (if label
-                           (doall (filter (edge-filter label) (seq edges)))
-                           (seq edges))]
+    (let [edges (seq (.getRelationships n direction))
+          label-filter (fn [edge] (some 
+                                    #(= % (keyword (edge-label edge))) 
+                                    labels))
+          filtered (if (empty? labels)
+                     edges
+                     (doall (filter label-filter edges)))]
       ;(info "get-edges edges: " (count (seq edges)))
       ;(info "get-edges filtered: " (count (seq filtered)))
       (info "(get-edges " 
-            (get-id n) " " direction " " label ")"
+            (get-id n) " " direction " " labels ")"
             " => " (count (seq edges)) " edges")
       filtered)))
 
-(defn in-edges [#^Node n & [label]]
-  (get-edges n INCOMING label))
+(defn in-edges [#^Node n & labels]
+  (get-edges n INCOMING labels))
 
-(defn out-edges [#^Node n & [label]]
-  (let [edges (get-edges n OUTGOING label)]
-    edges))
+(defn out-edges [#^Node n & labels]
+  (get-edges n OUTGOING labels))
 
-(defn in-nodes [#^Node n & [label]]
+(defn in-nodes [#^Node n & labels]
   ;(info "(in-nodes " (get-id n) " " label ")")
   (check-tx
-    (map #(.getStartNode %) (in-edges n label))))
+    (map #(.getStartNode %) (apply in-edges n labels))))
 
-(defn out-nodes [#^Node n & [label]]
+(defn out-nodes [#^Node n & labels]
   ;(info "(out-nodes " (get-id n) " " label ")")
   (check-tx
-    (map #(.getEndNode %) (out-edges n label))))
+    (map #(.getEndNode %) (apply out-edges n labels))))
 
 (defn path-query [#^Node start path]
   (check-tx
@@ -296,11 +304,26 @@
 ; TODO: Figure out how to do these without these annoying 
 ; relationship type-constraints on which edges we can traverse...
 ; - maybe we can use custom iterator functions?
-(defn dfs [#^Node start labels]
+(defn ndfs [#^Node start labels]
   (let [rel-types (doall (mapcat (fn [label] [(edge-type label) OUTGOING]) labels))]
-    (println "dfs labels: " rel-types)
     (seq (.iterator (apply (jfn 'traverse) start DEPTH END-OF-GRAPH 
                                ALL rel-types)))))
+
+(defn dfs-helper [#^Node node labels visitor visited]
+    (if visitor
+      (visitor node))
+
+    (let [visited (assoc visited (get-id node) true)]
+      (doseq [child (apply out-nodes node labels)]
+        (if (not (contains? visited (get-id child)))
+          (dfs-helper child labels visitor visited)))))
+
+(defn dfs [#^Node start & args]
+  (loop [node start
+         labels (first (filter #(or (seq? %) (vector? %)) args))
+         visitor (first (filter fn? args))
+         visited {}]
+    (dfs-helper start labels visitor visited)))
 
 (defn bfs [#^Node start]
   (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 

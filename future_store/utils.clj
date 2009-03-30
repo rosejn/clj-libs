@@ -63,6 +63,6 @@
        (do 
          ~@body)
      (finally (do
-                (future-store.manager/manager-stop)
+                (future-store.manager/stop)
                 (delete-store "test-store")))))
 

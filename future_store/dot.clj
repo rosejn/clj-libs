@@ -12,32 +12,37 @@
 (ns future-store.dot
   (:use future-store future-store.raw))
 
+(defn dot-name [obj]
+  (if (has-property? obj :name) 
+    (get-property obj :name) 
+    (get-id obj)))
+
 (defn- dot-nodes [nodes output & [options]]
   (if (empty? nodes)
     output
     (let [node (first nodes)
-               name (if (has-property? node) 
-                      (get-property node :name) 
-                      (get-id node))]
-      (recur (rest nodes) (str output "\n\t\"" name "\"") options))))
+               name (dot-name node)]
+      (recur (rest nodes) (str output "\n\t\"" name "\";") options))))
 
 (defn- dot-edges [edges output & [options]]
   (if (empty? edges)
     output
     (let [edge (first edges)
-               name (if (has-property? edge) 
-                      (get-property edge :name) 
-                      (get-id edge))
-               src  (edge-src edge)
-               tgt  (edge-tgt edge)]
-      (recur (rest edges) (str output "\n\t\"" name "\"") options))))
+          name (dot-name edge)
+          src  (dot-name (edge-src edge))
+          tgt  (dot-name (edge-tgt edge))]
+      (recur (rest edges) (str output "\n\t\"" src "\" -> \"" tgt 
+                               "\" [label=\"" name "\"];") options))))
 
-(defn print-dot [nodes edges & [options]]
+(defn print-dot [& [options]]
   (in-tx
-    (let [name (or (:name options) "\"future-store\"")
+    (let [nodes (all-nodes)
+          edges (all-edges)
+          name (or (:name options) "\"future-store\"")
                output (str "digraph " name " {\n" 
                            (dot-nodes nodes nil options) "\n"
                            (dot-edges edges nil options) "\n}\n")]
       (success)
       output)))
 
+(defn to-gif

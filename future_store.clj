@@ -101,7 +101,7 @@
     (set-property base :id-counter next)
     id))
 
-(defn- view-instance 
+(defn view-instance 
   "Create a new instance of the named view using props as the property values."  
   [name props]
   (check-tx 
@@ -113,7 +113,7 @@
         (set-property node k v))
       node)))
 
-(defn- view-all
+(defn view-all
   "Get all instances of the given view."
   [name]
   (let [base (view-root name)]
@@ -153,7 +153,7 @@
       (keyword? arg) (prop-predicate (apply hash-map args))
       (fn? arg)      arg)))
 
-(defn- view-find 
+(defn view-find 
   "Find an instance based on the ID or by using a predicate that will be passed each instance node until the returns true."
   [name & args]
   (info "(view-find " name " " args ")\nclass: " (class (first args)))
@@ -173,7 +173,7 @@
                          (IllegalArgumentException. 
                            (str "Could not find view using: " arg)))))
 
-(defn- view-update
+(defn view-update
   "Update an instance with the given property values."
   [name arg props]
   (let [node (object-root name arg)]
@@ -182,19 +182,19 @@
       (if (not= :id prop)
         (set-property node prop value)))))
 
-(defn- view-delete 
+(defn view-delete 
   "Delete a record using either the id or the node returned from find."
   [name arg]
   (let [node (object-root name arg)]
     (remove-node node)))
 
-(defn- view-spec [vname]
+(defn view-spec [vname]
   (get @VIEWS vname))
 
-(defn- view-associations [vname]
+(defn view-associations [vname]
   (:associations (view-spec vname)))
 
-(defn- view-add-association [vname assoc]
+(defn view-add-association [vname assoc]
   (let [spec       (view-spec vname)
         new-assocs (conj (:associations spec) assoc)]
     (info "view-add-association - spec: "
@@ -204,13 +204,16 @@
     (comment dosync (ref-set VIEWS 
                      (assoc @VIEWS vname new-spec)))))
 
-(defn- view-has-one [vname target & [type]]
+(defn view-has-one [vname target & [type]]
   (let [type (or type target)]
     (view-add-association vname [:has-one target type])))
 
-(defn- view-has-many [vname target & [type]]
+(defn view-has-many [vname target & [type]]
   (let [type (or type target)]
     (view-add-association vname [:has-many target type])))
+
+(defn view-add-property [vname pname & [spec]]
+  (let [spec (view-spec vname)]))
 
 ; TODO: Add index support 
 (defn create-view 
