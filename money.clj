@@ -4,29 +4,29 @@
 ; * Figure out what the accepted way to tag the type is
 ; * Figure out how to overload math operations 
 
-(defmulti to-money 
+(defmulti parse
   (fn [val] 
     (cond
       (integer? val) :int
       (float? val)   :float
       (string? val)  :string)))
 
-(defn- make-money
+(defn- make
   [cents]
   (with-meta {:cents cents} {:type :money}))
 
-(defmethod to-money :int
-  [cents] 
-  {:cents cents})
-
-(defmethod to-money :float
+(defmethod parse :int
   [val] 
-  {:cents (int (* val 100))})
+  (make (* 100 val)))
 
-(defmethod to-money :string
+(defmethod parse :float
   [val] 
-  (let [[all dol-str cent-str] (re-find #"([0-9]*)\.([0-9][0-9])" "123.45")]
-    {:cents (+ (* 100 (Integer/parseInt dol-str)) (Integer/parseInt cent-str))}))
+  (make (int (* 100 val))))
+
+(defmethod parse :string
+  [val] 
+  (let [[all dol-str cent-str] (re-find #"([0-9]*)\.([0-9][0-9])" val)]
+    (make (+ (* 100 (Integer/parseInt dol-str)) (Integer/parseInt cent-str)))))
 
 (defn dollars
   [money]
@@ -34,8 +34,8 @@
 
 (defn cents
   [money]
-  (rem money 100))
+  (rem (:cents money) 100))
 
-(defn print
+(defn 
   [money]
   (str "$" (dollars money) "." (cents money)))
