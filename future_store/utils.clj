@@ -44,7 +44,7 @@
       (.delete dir))))
 
 (defn delete-store [path]
-  (let [dir (new File path)]
+  (let [dir (File. path)]
     (delete-dir dir)))
 
 (defmacro test-store 
