@@ -1,5 +1,9 @@
 (in-ns 'auth)
 
+(defn request [method uri]
+  {:request-method method
+   :uri uri})
+
 (defn meta-assoc [obj key val]
   (with-meta obj (assoc (meta obj) key val)))
 
@@ -9,5 +13,4 @@
 (defn user-options [req key]
   (if-let [val (get (get (meta req) :user/options) key)]
     val
-    (get DEFAULT-OPTIONS key))
-
+    (get DEFAULT-OPTIONS key)))

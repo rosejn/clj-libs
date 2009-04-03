@@ -1,5 +1,4 @@
-(ns login.views
-  (:use compojure))
+(in-ns 'auth)
 
 (defn error-for [key]
   (get (flash :errors) key))

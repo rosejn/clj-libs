@@ -1,5 +1,5 @@
 (ns sample
-  (:require user)
+  (:require auth)
   (:use compojure))
 
 (defn tpl [content]
@@ -10,7 +10,12 @@
         [:body content ]]))
 
 (defn home [req]
-  (tpl "Home sweet home..."))
+  (tpl 
+    [:div 
+     [:p "Home sweet home..."]
+     (if-let [user (auth/current-user)]
+       [:p "Hello " (user :login) "!"]
+       (auth/login-form))]))
 
 (defn foo [req]
   (if (logged-in? req)
@@ -18,7 +23,8 @@
 
 (defroutes login-test-app
            (ANY "/" (home request))
-           (GET "/foo" (foo request)))
+           (GET "/foo" (foo request))
+           (ANY "/account/*" (auth/handlers)))
 
 (def authed-app
   (auth/wrap login-test-app))

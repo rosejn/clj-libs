@@ -1,10 +1,11 @@
 (ns config
-  (:use clojure.contrib.duck-streams))
+  (:use clojure.contrib.duck-streams)
+  (:import (java.io FileOutputStream FileInputStream)))
 
-(def *storage* :frog-file)
+(defonce *storage* :frog-file)
 
-(def CONFIG  (ref {}))
-(def PERSIST (ref false))
+(defonce CONFIG  (ref {}))
+(defonce PERSIST (ref false))
 
 (defn storage [& args] *storage*)
 
@@ -17,7 +18,8 @@
          lock#    (.lock channel#)]
      (try ~@body
        (finally 
-         (.release lock#)))))
+         (if (.isValid lock#)
+           (.release lock#))))))
 
 (defn frog-name [name]
   (str name ".frog"))
@@ -25,15 +27,16 @@
 ; Simple file based storage w/ spit and slurp
 (defmethod save-config :frog-file
   [path data]
-  (with-open [file (reader (frog-name path))]
+  (with-open [file (FileOutputStream. (frog-name path))]
     (with-file-lock file
       (spit file data))))
 
+; TODO: Can't lock a read-only channel, and the RandomAccessFile doesn't work with slurp*.  Ideally we make readers get a lock also though.
 (defmethod restore-config :frog-file
   [path]
-  (with-open [file (reader path)]
-    (with-file-lock file
-      (read-string (slurp* file)))))
+  (with-open [file (FileInputStream. (frog-name path))]
+    ;;(with-file-lock file
+      (read-string (slurp* file))))
 
 (defn save [name]
   (save-config name @CONFIG))
@@ -60,9 +63,10 @@
 (defn defaults [map]
   (set-all map))
 
-(defn get-all [map] @CONFIG)
+(defn get-all [] @CONFIG)
 
 ; Tests
+(comment
 (ns config.test
   (:use clojure.contrib.test-is)
   (:require config))
@@ -82,13 +86,13 @@
 
 (deftest test-persist []
          (config/set-all {:a 1 :b 2})
-         (config/save "test.frog")
+         (config/save "test")
          (config/value :a 10)
          (config/value :b 20)
          (is (= 10 (config/value :a)))
 
-         (config/restore "test.frog")
+         (config/restore "test")
          (is (= 2 (config/value :b)))
          
-         (delete-file "test.frog"))
-
+         (delete-file "test"))
+)

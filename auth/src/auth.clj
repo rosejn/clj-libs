@@ -1,6 +1,7 @@
 (ns auth
-  (:use compojure)
-  (:require digest config))
+  ;(:use compojure)
+  (:require digest config)
+  (:load views))
 
 (config/defaults {
                   :user-model   :memory
@@ -48,6 +49,22 @@
 
 (defn create [req]
   (create-user (req :params)))
+
+(defn login-url [& [prefix]]
+  (str prefix "/login"))
+
+(defn logout-url [& [prefix]]
+  (str prefix "/logout"))
+
+(defn create-url [& [prefix]]
+  (str prefix "/create"))
+
+(defroutes handlers
+           (GET  "*/login" (login-form request))
+           (POST "*/login" (login request))
+           (GET  "*/logout" (logout request))
+           (GET  "*/create" (create-form request))
+           (POST "*/create" (create request)))
 
 (defn wrap [app] 
   (fn [req] (app (login req))))
