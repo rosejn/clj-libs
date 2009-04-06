@@ -1,5 +1,5 @@
 (ns sample
-  (:require auth)
+  (:require [auth :as auth])
   (:use compojure))
 
 (defn tpl [content]
@@ -13,21 +13,23 @@
   (tpl 
     [:div 
      [:p "Home sweet home..."]
-     (if-let [user (auth/current-user)]
+     (if-let [user (auth/current-user req)]
        [:p "Hello " (user :login) "!"]
        (auth/login-form))]))
 
 (defn foo [req]
-  (if (logged-in? req)
-    (tpl (str "You are logged in: " (current-user)))
+  (if (auth/logged-in? req)
+    (tpl (str "You are logged in: " (auth/current-user)))
+    (tpl "You are not logged in.")))
 
 (defroutes login-test-app
            (ANY "/" (home request))
            (GET "/foo" (foo request))
-           (ANY "/account/*" (auth/handlers)))
+           (ANY "/account/*" auth/handlers))
 
 (def authed-app
   (auth/wrap login-test-app))
 
 (run-server {:port 8080}
-            "/*" (servlet authed-app))
+            "/*" (servlet login-test-app))
+;            "/*" (servlet authed-app))
