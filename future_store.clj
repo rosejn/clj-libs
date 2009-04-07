@@ -50,8 +50,8 @@
 
 ; Wrap a node so that it implements the Associative interface
 ; Note, the :node and :edge keys return the base Node or Relationship objects for internal use, but they will not be present when iterating over properties.
-(defn wrap-assoc [obj]
-  (proxy [clojure.lang.Associative] []
+(defn to-map [obj]
+  (proxy [clojure.lang.Associative clojure.lang.IFn] []
     (count [] (manager/do #(property-count obj)))
     (seq   [] (map (fn [[k v]] (wrap-entry k v)) (manager/do #(get-properties obj))))
     (cons  [[k v]] (manager/do #(set-property obj k v)))
@@ -61,13 +61,17 @@
                  (= (.getId o) (.getId obj))))
     (containsKey [k] (manager/do #(has-property? obj k)))
     (entryAt     [k] (wrap-entry k (manager/do #(get-property obj k))))
-    (assoc       [k v] (manager/do #(do (set-property obj k v) (wrap-assoc obj))))
-    (valAt       ([k] (if (or (= :node k) (= :edge k))
+    (assoc       [k v] (manager/do #(do (set-property obj k v) (to-map obj))))
+    (valAt      ([k] (if (or (= :node k) (= :edge k))
                         obj
                         (manager/do #(get-property obj k))))
            ([k d] (manager/do #(if (has-property? obj k) 
-                                 (get-property obj k))
-                              d)))))
+                                 (get-property obj k)
+                                 d))))
+    (invoke ([key] (manager/do #(get-property obj key)))
+            ([key default] (manager/do #(if (has-property? obj key) 
+                                 (get-property obj key)
+                                 default))))))
 
 (defn- create-view-root [label]
   (check-tx
@@ -134,10 +138,10 @@
     (not (empty? (id-str str)))
     false))
 
-(defn- prop-predicate [props]
+(defn- pattern-pred [pattern]
   (fn [node]
     (every? (fn [[prop value]]
-              (= value (get-property node prop))) props)))
+              (= value (get-property node prop))) pattern)))
 
 ; Returns a predicate function that expects to be passed a node or an edge.  
 ; args can be either:
@@ -150,11 +154,12 @@
     (cond 
       (integer? arg) #(= arg (to-id (get-property % :id)))
       (id-str? arg)  #(= (to-id arg) (to-id (get-property % :id)))
-      (keyword? arg) (prop-predicate (apply hash-map args))
+      (associative? arg) (pattern-pred arg) 
+      (keyword? arg) (pattern-pred (apply hash-map args))
       (fn? arg)      arg)))
 
 (defn view-find 
-  "Find an instance based on the ID or by using a predicate that will be passed each instance node until the returns true."
+  "Find an instance based on the ID, a pattern map, or by using a predicate that will be passed each instance node until the returns true."
   [name & args]
   (info "(view-find " name " " args ")\nclass: " (class (first args)))
   (let [base (view-root name)]
@@ -165,7 +170,7 @@
                        (out-nodes base :instance)))))))
 
 (defn- object-root [name arg]
-  (info "(object-root " name " " (id-str? arg) ")")
+  "Find the root node for a specific object given its property-map or its id."
   (cond
     (associative? arg) (:node arg)
     (or (integer? arg) (string? arg)) (view-find name arg)
@@ -228,16 +233,16 @@
     (dosync
       (ref-set VIEWS (assoc @VIEWS singular spec)))
     {
-     :create (fn [props] (wrap-assoc (manager/do #(view-instance singular props))))
-     :update (fn [arg props] (wrap-assoc (manager/do 
+     :create (fn [props] (to-map (manager/do #(view-instance singular props))))
+     :update (fn [arg props] (to-map (manager/do 
                                        #(view-update singular arg props))))
-     :all    (fn [] (map wrap-assoc (manager/do #(view-all singular))))
+     :all    (fn [] (map to-map (manager/do #(view-all singular))))
      :find   (fn [& args] 
                (let [result (manager/do #(apply view-find singular args))]
                  (cond
-                   (coll? result) (map wrap-assoc result)
+                   (coll? result) (map to-map result)
                    (nil? result) nil
-                   (instance? Node result) (wrap-assoc result))))
+                   (instance? Node result) (to-map result))))
      :delete (fn [arg] (manager/do #(view-delete singular arg)))
      :has-one (fn [label & [type]]
                 (view-has-one singular label type))
