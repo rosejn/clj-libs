@@ -1,4 +1,4 @@
-(ns digest
+(ns auth.digest
   (:import (java.security MessageDigest)))
 
 ; Using a unique site key in the digest helps keep passwords safer from dictionary attacks on weak passwords.
@@ -25,7 +25,7 @@
   (do-hash "SHA-1" input))
 
 (defn secure-digest [& stuff]
-  (digest/sha1 (apply str (interpose "--" stuff))))
+  (sha1 (apply str (interpose "--" stuff))))
 
 (defn make-salt []
   (let [time   (.getTime (java.util.Date. ))

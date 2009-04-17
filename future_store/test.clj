@@ -89,56 +89,67 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defview post)
 (deftest test-view []
-         (test-manager
-           (let [base    (manager/do #(view-root "post" true))
-                 counter (manager/do #(get-property base :id-counter))]
-             (is (not (nil? base)))
-             (is (= 0 counter))
-             (let [new-post (post/create {:title "Peppernoten for life"
-                                          :text  "Here we go..."})
-                   counter (manager/do #(get-property base :id-counter))
-                   new-id  (:id new-post)
-                   text    (:text new-post)
-                   post    (post/find 0)]
-               (is (= 0 new-id))
-               (is (= 1 counter))
-               (is (= "Here we go..." text))
-               (is (= (:node new-post) (:node post)))))))
+  (test-manager
+    (let [base    (manager/do #(view-root "post" true))
+          counter (manager/do #(get-property base :id-counter))]
+      (is (not (nil? base)))
+      (is (= 0 counter))
+      (let [new-post (post/create {:title "Peppernoten for life"
+                                   :text  "Here we go..."})
+            counter (manager/do #(get-property base :id-counter))
+            new-id  (:id new-post)
+            text    (:text new-post)
+            post    (post/find 0)]
+        (is (= 0 new-id))
+        (is (= 1 counter))
+        (is (= "Here we go..." text))
+        (is (= (:node new-post) (:node post)))))))
+
+(deftest test-view-update []
+  (test-manager
+    (let [post (post/create {:title "asdf"
+                             :text  "stuff here..."})]
+      (is (= "asdf" (post :title)))
+      (post/update (post :id) {:title "qwer"})
+      (is (= "qwer" (:title post)))
+      (let [modified (assoc post :title "zxcv")]
+        (is (= "zxcv" (:title (post/find (:id post)))))))))
 
 (defview bam)
 (deftest test-view-find []
-         (test-manager
-           (dotimes [i 100]
-             (bam/create {:num (* 10 i) :foo "asdf" :baz i}))
-           (is (= 20 (:num (bam/find 2))))
-           (is (= 3 (:id (bam/find :num 30 :baz 3 :foo "asdf"))))))
+  (test-manager
+    (dotimes [i 100]
+      (bam/create {:num (* 10 i) :foo "asdf" :baz i}))
+    (is (= 20 (:num (bam/find 2))))
+    (is (= 3 (:id (bam/find {:num 30 :baz 3 :foo "asdf"}))))
+    (is (= 3 (:id (bam/find :num 30 :baz 3 :foo "asdf"))))))
 
 (defview bom)
 (deftest test-view-delete []
-         (test-manager
-           (bom/create {:val 1})
-           (bom/create {:val 2})
-           (is (= 1 (:val (bom/find 0))))
-           (bom/delete 0)
-           (is (nil? (bom/find 0)))
-           (bom/delete (bom/find 1))
-           (is (nil? (bom/find 1)))))
+  (test-manager
+    (bom/create {:val 1})
+    (bom/create {:val 2})
+    (is (= 1 (:val (bom/find 0))))
+    (bom/delete 0)
+    (is (nil? (bom/find 0)))
+    (bom/delete (bom/find 1))
+    (is (nil? (bom/find 1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Validation tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-                                                
+
 (comment defview person {:name  [:string :unique]
-                 :email [:string true]
-                 :created-on})
+         :email [:string true]
+         :created-on})
 
 (comment deftest test-basic-validations []
          (test-manager
-           (dotimes [i 100]
-             (bam/create {:num (* 10 i) :foo "asdf" :baz i}))
-           (is (= 20 (:num (bam/find 2))))
-           (is (= 3 (:id (bam/find :num 30 :baz 3 :foo "asdf"))))))
-                                                
+         (dotimes [i 100]
+         (bam/create {:num (* 10 i) :foo "asdf" :baz i}))
+         (is (= 20 (:num (bam/find 2))))
+         (is (= 3 (:id (bam/find :num 30 :baz 3 :foo "asdf"))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Sub-graph tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -148,50 +159,50 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Manager tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-                                                        
+
 ;; TODO: write some tests that slam the manager from a bunch of threads and
 ;; test out weird border cases so we know it really does it's job.
-                                                       
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Index tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (comment
-(defn child-by-property [parent label property value]
+  (defn child-by-property [parent label property value]
   (let [children (out-nodes parent label)]
-    (first (filter #(= value (get-property % property)) children))))
+  (first (filter #(= value (get-property % property)) children))))
 
-(deftest index-vs-raw []
+  (deftest index-vs-raw []
   (test-store
-    (let [root (root-node)
-          size 100]
-      (dotimes [i size]
-        (link-new root :foo {:counter i}))
-      (let [index (index-property root :counter :foo)
-            num-trials 10
-            trial-seq (for [i (range num-trials)] (rand-int size))]
-        (doseq [val trial-seq]
-          (let [ival (lookup index val)
-                rval (child-by-property root :foo :counter val)]
-            (info "val: " val " ival: " (get-property ival :counter) 
-                  " rval: " (get-property rval :counter))
-            (is (= ival rval))))))))
+  (let [root (root-node)
+  size 100]
+  (dotimes [i size]
+  (link-new root :foo {:counter i}))
+  (let [index (index-property root :counter :foo)
+  num-trials 10
+  trial-seq (for [i (range num-trials)] (rand-int size))]
+  (doseq [val trial-seq]
+  (let [ival (lookup index val)
+  rval (child-by-property root :foo :counter val)]
+  (info "val: " val " ival: " (get-property ival :counter) 
+  " rval: " (get-property rval :counter))
+  (is (= ival rval))))))))
 
-(def index-speed-test []
+  (def index-speed-test []
   (test-store 
-    (let [root (root-node)
-          size 1000]
-      (dotimes [i size] (link-new root :foo {:counter i}))
+  (let [root (root-node)
+  size 1000]
+  (dotimes [i size] (link-new root :foo {:counter i}))
 
-      (let [index (index-property root :counter :foo)
-            num-trials 100
-            trial-seq (for [i (range num-trials)] (rand-int size))
-            raw-time (time (doseq [val trial-seq]
-                             (child-by-property root :foo :counter val)))
-            index-time (time (doseq [val trial-seq]
-                               (lookup index val)))]
-        (println "Raw time: " raw-time "\nIndex time: " index=-time)))))
-)                                                       
+  (let [index (index-property root :counter :foo)
+  num-trials 100
+  trial-seq (for [i (range num-trials)] (rand-int size))
+  raw-time (time (doseq [val trial-seq]
+  (child-by-property root :foo :counter val)))
+  index-time (time (doseq [val trial-seq]
+  (lookup index val)))]
+  (println "Raw time: " raw-time "\nIndex time: " index=-time)))))
+  )                                                       
 
 (defn fs-tests [] 
   (run-tests (find-ns 'future-store.test))
