@@ -1,6 +1,42 @@
 (ns peg
   (:import java.util.Scanner))
 
+"This library is used to generate recursive descent parsers.  That is, top-down parsers
+constructed by a set of mutually recursive functions.  It accepts a parsing expression 
+grammar (PEG) as input, and it creates a function of an input stream as output.  The 
+output of this parser function will be a syntax tree, or if actions are attached to your
+grammar rules then the syntax tree can be processed with semantics during parsing in order to
+produce a modified abstract syntax tree or other desired output.
+
+A PEG grammar is constructed by defining a list of rules.  Each rule is built of
+a name, a pattern, and an optional action.  The name will allow for referencing 
+the pattern inside of other patterns, and a pattern can consist of elements which 
+are either strings or regular expressions:
+
+FOO <- \"foo\"
+BAR <- #\"[big|small] foot\"
+
+A pattern can be made optional like in regular expressions using one of the 
+following suffixes:
+
+Zero or one occurrence:
+element?
+
+One or more occurrences:
+element+
+
+Zero or more occurrences:
+element*
+
+A pattern becomes a look ahead predicate by using one of these prefixes:
+
+Succeed if this element matches, but consume no input:
+&element
+
+Succeed if this element does not match, and consume no input:
+!element
+"
+
 (def *input* nil)
 
 (defn- pattern? [p]
@@ -66,6 +102,7 @@
             res))))))
 
 (defn expr* [expr]
+  "Match zero or more of the given expression."
   (fn []
     (loop [matches nil]
       (let [res (match expr)]
@@ -74,6 +111,7 @@
           (recur (conj matches res)))))))
 
 (defn expr+ [expr]
+  "Match one or more of the given expression, consuming all input."
   (let [repeater (expr* expr)]
     (fn []
       (let [res (repeater)]
@@ -82,6 +120,8 @@
           res)))))
 
 (defn expr? [expr]
+  "Match zero or one of the given expression.  It consumes the input if the match
+  succeeds, or returns true and does not consume any input if not."
   (fn []
     (let [res (match expr)]
       (if (nil? res)
@@ -89,6 +129,8 @@
         res))))
 
 (defn pred& [expr]
+  "A positive look ahead predicate, which will return true if the expression 
+  matches, but the input will not be consumed."
   (fn []
     (let [save *input*
           res (match expr)]
@@ -98,6 +140,8 @@
         nil))))
 
 (defn pred! [expr]
+  "A negative look ahead predicate, returning true if the expression does not 
+  match, and no input will be consumed."
   (fn []
     (let [save *input*
           res (match expr)]
@@ -107,6 +151,7 @@
         nil))))
 
 (defn eos []
+  "Matches the end of the input stream."
   (if (empty? *input*)
     true
     nil))
@@ -117,7 +162,7 @@
       (expr))))
 
 (defn parser [expr fun]
-  (fn []
+  (fn parser-fn []
     (let [res (expr)]
       ;(println "parser res: " res)
       (if (seq? res)
@@ -161,13 +206,42 @@
                     (fn [a plus b] (println "add: " a plus b) (+ a b))))
 (def SUB    (parser (expr-seq NUMBER (expr #"\-") NUMBER)
                     (fn [a minus b] (- a b))))
+(comment def SUM    (parser (expr-seq NUMBER (expr-choice 
+                                       (expr-seq (expr #"\+") NUMBER)
+                                       (expr-seq (expr #"\-") NUMBER)))))
 (def MUL    (parser (expr-seq NUMBER (expr #"\*") NUMBER)
                     (fn [a times b] (* a b))))
 (def DIV (parser (expr-seq NUMBER (expr #"\/") NUMBER)
                     (fn [a div b] (/ a b))))
-(def calc-grammar (grammar ADD))
+(def calc-grammar (grammar SUM))
 (print "calc grammar: ")
-(println (calc-grammar "3 + 5"))
+(println (calc-grammar "3 + 5 + 10 + 32 + 32 + 3 + 1"))
+
+(defn third [coll]
+  (nth coll 2))
+
+(defn make-grammar-rules [grammar-name rules]
+  (let [ns (create-ns (symbol grammar-name))]
+    (doseq [rule rules]
+      (println "RULE: " rule)
+      (let [name       (first rule)
+            expression (second rule)
+            action     (if (= 3 (count rule)) (third rule) nil)]
+        (intern ns (symbol name) (parser expression action))))
+    (intern ns 'parse (grammar (last rules)))))
+
+(defmacro defgrammar [name & rules]
+  (make-grammar-rules name rules))
+
+(defgrammar calculator
+  (NUMBER (expr #"(-)?\d+")
+          (fn [n] (println "num: " n) (Integer. n)))
+  (ADD (expr-seq NUMBER (expr #"\+") NUMBER)
+       (fn [a plus b] (println "add: " a plus b) (+ a b))))
+
+(defgrammar num (NUMBER (expr #"(-)?\d+") #(Integer . %)))
+
+;;(println (calculator/parse "3 + 5"))
 
 ;; Tests
 (use 'clojure.contrib.test-is)
