@@ -59,7 +59,7 @@
 "Start the storage manager to provide shared, single threaded access to the DB."
   [store-path]
   (when (not (and (= store-path (:store-path @MANAGER))
-                (running?)))
+                  (running?)))
     (stop)
     (rset! MANAGER { 
                     :running true

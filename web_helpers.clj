@@ -1,6 +1,44 @@
 (ns web-helpers
-  (:import (java.util Date))
-  (:use clojure.contrib.json.write compojure.html))
+  (:import (java.util GregorianCalendar))
+  (:use clojure.contrib.json.write compojure.html
+     compojure.encodings))
+
+(defn seconds [secs] secs)
+(defn minutes [mins] (seconds (* 60 mins)))
+(defn hours [hours] (minutes (* 60 hours)))
+(defn days [days] (hours (* 24 days)))
+(defn weeks [weeks] (days (* 7 weeks)))
+(defn months [months] (days (* 30 months)))
+
+(defn cookie
+  "Return a Set-Cookie header based on either, a name and value, 
+  or a cookie map:
+  {:name \"my-cookie\"       
+   :value \"data-goes-here\"
+   :expires (days 1)                ; optional
+   :comment \"special user data\"   ; optional
+   :path \"foo/bar\"                ; optional
+   :secure true                     ; optional
+  }"
+  ([name value]
+   (cookie {:name name :value value}))
+  ([cookie]
+   (let [{:keys [name value secure]} cookie
+         attrs (-> cookie (dissoc :name) (dissoc :value) (dissoc :secure))
+         attr-str (reduce 
+                    (fn [res [attr val]] 
+                      (str res "; " 
+                           (urlencode (clojure.core/name attr)) 
+                           "=" 
+                           (urlencode val)))
+                    ""
+                    attrs)
+         attr-str (if secure
+                    (str attr-str "; secure")
+                    attr-str)
+         cookie-str (str (urlencode name) "=" (urlencode value)
+                         attr-str)]
+     {:headers {"Set-Cookie" cookie-str}})))
 
 (defn js-on-ready [code]
   (javascript-tag 
@@ -15,6 +53,28 @@
 (defn js-toggle-button [button target]
   (js-on-ready
     (str "devo.toggle_button(\"" button "\", \"" target "\");")))
+
+(defn js-editable [container url & [extra-params]]
+  (js-on-ready 
+    (str  
+      "$('" container " .editable').editable('" url "', {
+         indicator : 'Saving...',
+         tooltip   : 'Click to edit...'"
+      (if extra-params
+        (str ", submitdata: " (json-str extra-params)))
+     "});
+
+     $('" container " .editable-area').editable('" url "', { 
+         indicator : 'Saving...',
+         tooltip   : 'Click to edit...',
+         type      : 'textarea',
+         cancel    : 'Cancel',
+         submit    : 'OK',
+         rows      : 10,
+         cols      : 40"
+      (if extra-params
+        (str ", submitdata: " (json-str extra-params)))
+     "});")))
 
 (defn js-file-uploader [target url]
   (javascript-tag 
@@ -49,10 +109,10 @@
     (link-to-function txt (js-load-update url target params))))
 
 (defn js-post-update [form-id url target]
-  (str "$.post(\"" url "\", $(\"" form-id "\").serialize(), 
+  (str "$.post('" url "', $('" form-id "').serialize(), 
           function(data) {
-            devo.log(\"Post returned data: \" + data);
-            $(\"" target "\").html(data);
+            devo.log('Post returned data: ' + data);
+            $('" target "').html(data);
           });"))
 
 (defmacro ajax-form-to [url target & body]

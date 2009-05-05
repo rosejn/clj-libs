@@ -182,7 +182,7 @@
   "Update an instance with the given property values."
   [name arg props]
   (let [node (object-root name arg)]
-    (info "\n\n###############\nview-update: " arg ", " node "\n\n")
+    (info "(view-update: " arg ", " node "\n\n")
     (doseq [[prop value] props]
       (if (not= :id prop)
         (set-property node prop value)))))
@@ -202,9 +202,9 @@
 (defn view-add-association [vname assoc]
   (let [spec       (view-spec vname)
         new-assocs (conj (:associations spec) assoc)]
-    (info "view-add-association - spec: "
-          spec "\n new-assoc:\n"
-          new-assocs)
+    ;(info "view-add-association - spec: "
+    ;      spec "\n new-assoc:\n"
+    ;      new-assocs)
     ;    new-spec   (assoc spec :associations new-assocs)]
     (comment dosync (ref-set VIEWS 
                      (assoc @VIEWS vname new-spec)))))
@@ -224,7 +224,7 @@
 (defn create-view 
   "Creates a new view using the singular name."  
   [singular & [args]]
-  (info "(create-view " singular " " args ")")
+  ;(info "(create-view " singular " " args ")")
   (let [plural (or (:plural args) (pluralize singular))
         spec {:singular singular
               :plural plural
@@ -257,8 +257,8 @@
         sym-name (symbol name)
         ns-str   (str (ns-name *ns*) "." name)
         sym-ns   (symbol ns-str)]
-    (info "(defview " name ") " 
-          " => " ns-str)
+    ;(info "(defview " name ") " 
+    ;      " => " ns-str)
     `(let [view-funs# (create-view ~name ~args)
            view-ns#   (create-ns (symbol ~ns-str))]
        (doseq [[fun-name# fun#] view-funs#]
@@ -269,7 +269,7 @@
   "Import the named view's namespace into the current namespace for handy access."
   (let [str-name (str (eval full-name))
         model-name (nth (re-find #".*\.(.*)" str-name) 1)]
-     (info "(view " str-name ") => "  model-name "\n")
+     ;(info "(view " str-name ") => "  model-name "\n")
     `(.addAlias *ns* (symbol ~model-name) (find-ns (symbol ~str-name)))))
 
 (defn view-store 

@@ -129,7 +129,11 @@
 
 (defn get-property [obj key]
   ;(info "(get-property " (get-id obj) " " key ")")
-  (check-tx (.getProperty obj (str key))))
+  (check-tx 
+    (try 
+      (.getProperty obj (str key))
+      (catch org.neo4j.api.core.NotFoundException e
+        nil))))
 
 (defn get-property-keys [obj]
   ;(info "(get-property-keys " (get-id obj) ")")
