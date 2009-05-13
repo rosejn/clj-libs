@@ -1,3 +1,26 @@
+Interface:
+
+find (id or attr-map => v-map)
+insert (attr-map => ID)
+create (attr-map => v-map)
+update (attr-map w/ id, or v-map and attr-map)
+destroy (attr-map w/ id or just id => true or false)
+
+
+---------------------------------------
+
+* Put view-* functions into a core namespace
+* 
+
+* A CouchDB style MapReduce index mechanism
+ - Given a predicate function create an index node that points to all members of a set that passes the predicate
+ - Given a mapping function create an index node that points to a set of nodes which are the result of applying the mapping function to the given nodes
+
+* Validations
+* Callbacks
+
+------------------------------------------
+
 * UUIDs for nodes and edges w/ a UUID index for each (sub-)graph
  - b-tree index over :uuid property
  - look into supporting versioning and persistence on property modifications
@@ -22,4 +45,3 @@
   - how can this be a pluggable mechanism?
   - replicas: alternate nodes that satisfy this proxy node's capability
 
-* Integrate validation library

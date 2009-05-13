@@ -103,7 +103,8 @@
         (is (= 0 new-id))
         (is (= 1 counter))
         (is (= "Here we go..." text))
-        (is (= (:node new-post) (:node post)))))))
+        (is (= (:node new-post) (:node post)))
+        (is (= Integer (class (post/insert {:foo "asd" :bar 23 :baz "asdf"}))))))))
 
 (deftest test-view-update []
   (test-manager

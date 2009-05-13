@@ -233,19 +233,39 @@
     (dosync
       (ref-set VIEWS (assoc @VIEWS singular spec)))
     {
+     ; Create and return a new record using the given map
      :create (fn [props] (to-map (manager/do #(view-instance singular props))))
+
+
+     ; Create a new record using the given map, and return its ID
+     :insert (fn [props] (manager/do 
+                           #(get-property 
+                              (view-instance singular props) 
+                              :id)))
+
+     ; Update the given record with the given map values
+     ; TODO: Maybe this is redundant given the Associative interface capabilities?
      :update (fn [arg props] (to-map (manager/do 
+
                                        #(view-update singular arg props))))
+
+     ; Returns a seq of all the records for this view
      :all    (fn [] (map to-map (manager/do #(view-all singular))))
+
+     ; Find a record using either it's ID, a map of properties, or a boolean predicate function
      :find   (fn [& args] 
                (let [result (manager/do #(apply view-find singular args))]
                  (cond
                    (coll? result) (map to-map result)
                    (nil? result) nil
                    (instance? Node result) (to-map result))))
+
+     ; Delete the given record
      :delete (fn [arg] (manager/do #(view-delete singular arg)))
+
      :has-one (fn [label & [type]]
                 (view-has-one singular label type))
+
      :has-many (fn [label & [type]]
                  (view-has-many label type))
      }))
