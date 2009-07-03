@@ -29,3 +29,22 @@
     (dotimes [i spread]
       (build-tree (link-new parent label) (- depth 1) spread label))))
 
+(defn load-tree
+  "Load a tree representation of a sub-graph using maps and vectors.  Map properties with simple values will be stored as regular properties, but map values and vectors of maps will be stored as edges to new nodes. For example:
+          {:app {
+                 :foo {:app-name \"foo\"}
+                 :bar {:app-name \"bar\"}
+                }
+           :net {
+                  :peer [{:peer-id 1} {:peer-id 2}]
+                }
+          }"
+  [parent label root] 
+  (let [node (link-new parent label)]
+    (doseq [[key val] root]
+      (cond
+        (map? val) (load-tree node key val)
+        (and (vector? val) 
+             (every? map? val)) (doseq [child val]
+                                  (load-tree node key child))
+        :else (set-property node key val)))))

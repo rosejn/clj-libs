@@ -83,6 +83,29 @@
           (is (= 13 (var-get foo-count)))
           (is (= 25 (var-get foo-bar-count)))
           )))))
+                                                
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PQL tests
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(deftest simple-query []
+  (test-store
+    (let [root (root-node)]
+      (in-tx 
+        (n-children 
+          (link-new (link-new (link-new (link-new root 
+                                                  :foo) :foo) :foo) :foo {"value" 42})
+          5
+          :bar)
+        (success))
+      (let [tgt (first (path-query root [:foo :foo :foo :foo]))
+            val (.getProperty tgt "value")
+            edge-count (count (out-edges tgt :bar))
+            spread-count (count (path-query root [:foo :foo :foo :foo :bar]))]
+        (info "simple-query tgt: " tgt)
+        (is (= 42 val))
+        (is (= 5 edge-count))
+        (is (= 5 spread-count))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; View tests

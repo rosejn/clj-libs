@@ -10,7 +10,9 @@
 ;;  Created 23 February 2009
 
 (ns future-store.graphml
-  (:use future-store future-store.raw))
+  (:use future-store future-store.raw
+     clojure.contrib.str-utils clojure.contrib.json.write
+     clojure.contrib.seq-utils clojure.contrib.lazy-xml))
 
 (defn gxml-edges [edges]
   (map (fn [e]
@@ -20,17 +22,28 @@
        edges))
 
 (defn gxml-node [n]
-  (let [tag {:tag :node
-             :attrs {:id (get-id n)}}]
-    (if (not (zero? (property-count n)))
+  (let [id (get-id n)
+        props (assoc (apply hash-map (flatten (get-properties n))) :id id)
+        p-str (apply str 
+                     (interpose "\n" (re-split #"," (json-str props))))
+        p-str (.substring p-str 1 (dec (count p-str)))
+        tag {:tag :node
+             :attrs {:id id}
+             :content [{:tag :data
+                       :attrs {:key "label"}
+                       :content [p-str]}]}]
+    tag))
+
+(comment  
+  (if (not (zero? (property-count n)))
       (assoc tag 
              :content 
              (map (fn [[k v]] 
                    {:tag :data
                     :attrs {:key k}
-                    :content [v]})
+                    :content [(str v)]})
                  (get-properties n)))
-      tag)))
+      tag))
 
 (defn gxml-nodes [nodes]
   (map gxml-node nodes))

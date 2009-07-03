@@ -155,30 +155,6 @@
   (check-tx (.setProperty obj (str key) value))
   obj)
 
-(comment
-(defn wrap-entry [k v]
-  (proxy [clojure.lang.IMapEntry] []
-    (key [] k)
-    (val [] v)))
-
-(defn wrap-assoc [obj]
-  (proxy [clojure.lang.Associative] []
-    (count [] (property-count obj))
-    (seq   [] (get-properties obj))
-    (cons  [[k v]] (set-property obj k v))
-    (empty [] {}) ; Not sure what would make sense here...
-    (equiv [o] (and
-                 (= (class o) (class obj))
-                 (= (.getId o) (.getId obj))))
-    (containsKey [k] (has-property? obj k))
-    (entryAt     [k] (wrap-entry k (get-property obj k)))
-    (assoc       [k v] (do (set-property obj k v) (wrap-assoc obj)))
-    (valAt       ([k] (get-property obj k))
-                 ([k d] (if (has-property? obj k) 
-                          (get-property obj k)
-                          d)))))
-)
-
 (declare dfs)
 
 ; These should return lazy sequences sitting on top of the java iterators

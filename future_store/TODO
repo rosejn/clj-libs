@@ -19,6 +19,28 @@ destroy (attr-map w/ id or just id => true or false)
 * Validations
 * Callbacks
 
+* Implement a content store, where blobs are stored using a hash of the blob as its ID
+ - each blob has a corresponding node in the graph
+ - linked to Mime-type nodes
+
+* Pattern based querying (MetaWeb's MQL style)
+ - Use map {} syntax to specify the properties and relations that are being looked for, where the values specify either predicates to match, or the desired output format
+  * null => the property value 
+  * []   => the set of relation target IDs
+  * [{}] => the set of relation target objects
+ - support arbitrary nesting:
+{
+  "name" : "Synchronicity",
+  "artist" : "The Police",
+  "track" : [{
+     "name":null,
+     "length":null
+  }]
+}
+
+
+
+
 ------------------------------------------
 
 * UUIDs for nodes and edges w/ a UUID index for each (sub-)graph

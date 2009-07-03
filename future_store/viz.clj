@@ -24,7 +24,6 @@
       (set-property n "foo" "bar")
       (set-property n "name" "random"))
     (success))
-  (print-gxml ["name"])
   (with-out-str (print-gxml ["name" "foo"])))
 
 (defn save-pdf [frame path]
@@ -63,7 +62,7 @@
         panel (doto (new JPanel)
                 ;(.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
                 (.add display))
-        lr    (doto (new LabelRenderer "foo")
+        lr    (doto (new LabelRenderer "label")
                 (.setRoundedCorner 8 8))
         palette (into-array Integer/TYPE
                   [(ColorLib/rgb 255 180 180)
@@ -103,4 +102,26 @@
       (.pack)
       (.setVisible true)))))
 
+(defn show-graph []
+  (let [xml (with-out-str (print-gxml ["label"]))
+        g-panel (draw-graph xml)
+        app-frame (JFrame. "Future Store - Visualization")]
+    (doto app-frame
+      (.setLayout (GridLayout. 2 1 3 3))
+      (.add g-panel)
+      (.pack)
+      (.setVisible true))))
 
+(def test-graph {:app {
+                 :foo {:app-name "foo"}
+                 :bar {:app-name "bar"}
+                }
+           :net {
+                  :peer [{:peer-id 1} {:peer-id 2}]
+                }
+          })
+
+(defn test-viz []
+  (test-store
+    (load-tree (root-node) :test test-graph)
+    (show-graph)))
