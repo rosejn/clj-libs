@@ -104,9 +104,10 @@
   (let [params (cond 
                  (associative? (first params)) (merge {} (first params))
                  (even? (count params)) (apply hash-map params)
-                 true {})
-        params (merge {:class "ajax-link"} params)]
-    (link-to-function txt (js-load-update url target params))))
+                 true {})]
+    (link-to-function txt 
+                      (js-load-update url target params)
+                      {:class "ajax-link"})))
 
 (defn js-post-update [form-id url target]
   (str "$.post('" url "', $('" form-id "').serialize(), 
