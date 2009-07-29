@@ -51,7 +51,7 @@
 "Executes body within the context of a store named \"test-store\" that will be automatically deleted when body completes or an exception occurs."  
   [& body]
   `(try 
-     (future-store.raw/with-store "test-store"
+     (future-store.neo/with-store "test-store"
        ~@body)
      (finally (delete-store "test-store"))))
 

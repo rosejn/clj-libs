@@ -4,7 +4,7 @@
      clojure.contrib.test-is
      future-store
      [future-store.manager :as manager]
-     (future-store raw builder utils dot)))
+     (future-store graph neo builder utils dot)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Raw tests

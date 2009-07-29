@@ -4,7 +4,9 @@
              LinkedBlockingDeque
              FutureTask
              TimeUnit))
-  (:use future-store.raw jlog clj-backtrace.repl))
+  (:use 
+     (future-store graph neo)
+     jlog clj-backtrace.repl))
 
 (defmacro assoc! [map key value]
   `(dosync (ref-set ~map (assoc (deref ~map) ~key ~value))))
@@ -27,7 +29,7 @@
 
 (defn- job-processor []
   (with-store (:store-path @MANAGER)
-    (info "(job-processor " (:store-path @MANAGER) ") => " future-store.raw/*store*)
+    (info "(job-processor " (:store-path @MANAGER) ") => " future-store.graph/*store*)
     (try 
       (while (running?) 
         (.run (next-job)))

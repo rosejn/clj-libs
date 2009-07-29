@@ -10,7 +10,7 @@
 ;;  Created 23 Feb 2009
 
 (ns future-store.builder
-  (:use future-store.raw))
+  (:use future-store.graph))
 
 (defn n-children [parent n label]
   (if (zero? n)

@@ -10,7 +10,7 @@
 ;;  Created 23 February 2009
 
 (ns future-store.dot
-  (:use future-store future-store.raw))
+  (:use future-store (future-store graph neo)))
 
 (defn dot-name [obj]
   (if (has-property? obj :name) 

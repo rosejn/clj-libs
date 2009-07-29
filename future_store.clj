@@ -33,7 +33,7 @@
                                Traverser
                                Traverser$Order))
   (:use 
-     (future-store raw utils) 
+     (future-store graph neo utils) 
      [future-store.manager :as manager]
      jlog))
 
