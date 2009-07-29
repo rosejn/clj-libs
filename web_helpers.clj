@@ -87,12 +87,12 @@
 
 (defn link-to-function [txt js-fun & [options]]
   (let [options (or options {})]
-    [:a (merge options {:onclick js-fun}) txt]))
+    [:a.ajax-link (merge options {:onclick js-fun}) txt]))
 
 (defn- js-load-update [url target params]
   (str "$(\"" target "\").load(\"" url "\", "
        (json-str params) ", function() {
-         devo.log(\"ajax load complete...\");
+         devo.ajax-post-process();
        });"))
 
 (defn ajax-link-to 
@@ -105,9 +105,7 @@
                  (associative? (first params)) (merge {} (first params))
                  (even? (count params)) (apply hash-map params)
                  true {})]
-    (link-to-function txt 
-                      (js-load-update url target params)
-                      {:class "ajax-link"})))
+    (link-to-function txt (js-load-update url target params))))
 
 (defn js-post-update [form-id url target]
   (str "$.post('" url "', $('" form-id "').serialize(), 
