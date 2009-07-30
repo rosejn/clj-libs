@@ -5,7 +5,7 @@
              FutureTask
              TimeUnit))
   (:use 
-     (future-store graph neo)
+     (future-store graph)
      jlog clj-backtrace.repl))
 
 (defmacro assoc! [map key value]

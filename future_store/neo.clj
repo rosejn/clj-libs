@@ -28,7 +28,6 @@
   (:use 
      (future-store graph)
      clojure.set
-     clojure.contrib.seq-utils 
      jlog))
 
 (def BOTH Direction/BOTH)
@@ -46,8 +45,9 @@
 
 (defn open-store [path]
   (info "(open-store " path ")")
-  (proxy [EmbeddedNeo clojure.lang.IMeta] [path]
-    (meta [] {:tag :future-store.graph/neo})))
+  (new EmbeddedNeo path))
+;  (proxy [EmbeddedNeo clojure.lang.IMeta] [path]
+;    (meta [] {:tag :future-store.graph/neo})))
     
 (defn close-store [s]
   (info "(close-store)") 
@@ -89,35 +89,35 @@
                     (success)
                     ctx-result#))))))
 
-(defmethod root-node :neo [] 
+(defmethod root-node :future-store.graph/neo [] 
   (check-tx (.getReferenceNode *store*)))
 
-(defmethod find-node :neo [id]
+(defmethod find-node :future-store.graph/neo [id]
   (info "(find-node " id ")")
   (check-tx 
     (try 
       (.getNodeById *store* id)
       (catch NotFoundException e nil))))
 
-(defmethod find-edge :neo [id]
+(defmethod find-edge :future-store.graph/neo [id]
   (check-tx 
     (try 
       (.getRelationshipById *store* id)
       (catch NotFoundException e nil))))
 
-(defmethod edge-label :neo [e]
+(defmethod edge-label :future-store.graph/neo [e]
   (check-tx
     (.name (.getType e))))
 
-(defmethod edge-src :neo [e]
+(defmethod edge-src :future-store.graph/neo [e]
   (check-tx
     (.getStartNode e)))
 
-(defmethod edge-tgt :neo [e]
+(defmethod edge-tgt :future-store.graph/neo [e]
   (check-tx
     (.getEndNode e)))
 
-(defmethod get-id :neo [obj]
+(defmethod get-id :future-store.graph/neo [obj]
   (if (not (or (instance? Node obj)
                (instance? Relationship obj)))
     (throw 
@@ -125,10 +125,10 @@
         (str "Must pass either a Node or a Relationship (Edge) to get-id, got: " (class obj)))))
   (.getId obj))
 
-(defmethod has-property? :neo [obj key]
+(defmethod has-property? :future-store.graph/neo [obj key]
   (check-tx (.hasProperty obj (str key))))
 
-(defmethod get-property :neo [obj key]
+(defmethod get-property :future-store.graph/neo [obj key]
   ;(info "(get-property " (get-id obj) " " key ")")
   (check-tx 
     (try 
@@ -136,50 +136,24 @@
       (catch org.neo4j.api.core.NotFoundException e
         nil))))
 
-(defmethod get-property-keys :neo [obj]
+(defmethod get-property-keys :future-store.graph/neo [obj]
   ;(info "(get-property-keys " (get-id obj) ")")
   (check-tx 
     (seq (.getPropertyKeys obj))))
 
-(defmethod set-property :neo [obj key value]
+(defmethod set-property :future-store.graph/neo [obj key value]
   ;(info "(set-property " (get-id obj) " {" key " " value "})")
   (check-tx (.setProperty obj (str key) value))
   obj)
 
-(defmethod get-properties :graph [obj]
-  (check-tx
-    (doall 
-      (map (fn [key]
-             [key (get-property obj key)])
-           (get-property-keys obj)))))
-
-(defmethod property-count :graph [obj]
-  (count (get-property-keys obj)))
-
-; These should return lazy sequences sitting on top of the java iterators
-(defmethod all-nodes :neo []
-  (with-local-vars [nodes (list)]
-    (dfs (root-node)
-         (fn [node] (var-set nodes (conj (var-get nodes) node))))
-    (var-get nodes)))
-
-(defmethod all-edges :neo []
-  (apply concat (map out-edges (all-nodes))))
-
-; These might have to actually count, or else we might need to keep track of
-; the counts by hand if this is important, because I don't see a NEO method to
-; get these values.
-(defmethod node-count :neo [])
-(defmethod edge-count :neo [])
-
-(defmethod add-node :neo [& [props]]
+(defmethod add-node :future-store.graph/neo [& [props]]
   ;(info "(add-node " props ")")
   (check-tx 
     (let [n (.createNode *store*)]
       (doseq [[k v] props] (set-property n k v))
       n)))
 
-(defmethod remove-node :neo [#^Node n]
+(defmethod remove-node :future-store.graph/neo [#^Node n]
   ;(info "(remove-node " (get-id n) ")")
   (try 
     (check-tx 
@@ -190,10 +164,10 @@
     true
     (catch NotFoundException e false)))
 
-(defmethod edge-type :neo [#^Keyword n]
+(defmethod edge-type :future-store.graph/neo [#^Keyword n]
   (proxy [RelationshipType] [] (name [] (name n))))
 
-(defmethod add-edge :neo [#^Node src #^Keyword label #^Node dest & [props]]
+(defmethod add-edge :future-store.graph/neo [#^Node src #^Keyword label #^Node dest & [props]]
   ;(info "(add-edge " (get-id src) " " label " " (get-id dest) " " props ")")
   (check-tx 
     (let [edge (.createRelationshipTo src dest (edge-type label))]
@@ -202,14 +176,7 @@
 
 (def link add-edge)
 
-(defmethod link-new :neo [#^Node src #^Keyword label & [props]]
-  ;(info "(link-new " (get-id src) " " label " " props ")")
-  (check-tx 
-    (let [n (if props (add-node props) (add-node))]
-      (add-edge src label n)
-      n)))
-
-(defmethod remove-edge :neo [#^Relationship e]
+(defmethod remove-edge :future-store.graph/neo [#^Relationship e]
   (check-tx 
     (.delete e)))
 
@@ -229,43 +196,11 @@
       ;      " => " (count (seq edges)) " edges")
       filtered)))
 
-(defmethod in-edges :neo [#^Node n & labels]
+(defmethod in-edges :future-store.graph/neo [#^Node n & labels]
   (get-edges n INCOMING labels))
 
-(defmethod out-edges :neo [#^Node n & labels]
+(defmethod out-edges :future-store.graph/neo [#^Node n & labels]
   (get-edges n OUTGOING labels))
-
-(defmethod in-nodes :neo [#^Node n & labels]
-  ;(info "(in-nodes " (get-id n) " " label ")")
-  (check-tx
-    (map #(.getStartNode %) (apply in-edges n labels))))
-
-(defmethod out-nodes :neo [#^Node n & labels]
-  ;(info "(out-nodes " (get-id n) " " label ")")
-  (check-tx
-    (map #(.getEndNode %) (apply out-edges n labels))))
-
-(defmethod path-query :neo [#^Node start path]
-  (check-tx
-    (if (empty? path)
-      (do
-        start)
-      (let [label (keyword (first path))
-                  children (out-nodes start label)
-                  result (doall (map #(path-query % (rest path)) children))]
-        (info "(path-query " (get-id start) " " path ")"
-              " => " result)
-        (flatten result)))))
-
-(defmethod path-first :neo [#^Node start path]
-  (info "(path-first " (get-id start) " " path ")")
-  (first (path-query start path)))
-
-(defmethod out-degree :neo [#^Node n]
-  (count (out-edges n)))
-
-(defmethod in-degree :neo [#^Node n]
-  (count (in-edges n)))
 
 (defn jcall [obj name & args]
   (clojure.lang.Reflector/invokeInstanceMethod obj (str name)
@@ -285,22 +220,6 @@
     (seq (.iterator (apply (jfn 'traverse) start DEPTH END-OF-GRAPH 
                                ALL rel-types)))))
 
-(defn dfs-helper [#^Node node labels visitor visited]
-    (if visitor
-      (visitor node))
-
-    (let [visited (assoc visited (get-id node) true)]
-      (doseq [child (apply out-nodes node labels)]
-        (if (not (contains? visited (get-id child)))
-          (dfs-helper child labels visitor visited)))))
-
-(defmethod dfs :neo [#^Node start & args]
-  (loop [node start
-         labels (first (filter #(or (seq? %) (vector? %)) args))
-         visitor (first (filter fn? args))
-         visited {}]
-    (dfs-helper start labels visitor visited)))
-
-(defmethod bfs :neo [#^Node start]
+(defmethod bfs :future-store.graph/neo [#^Node start]
   (seq (.iterator (.traverse start BREADTH END-OF-GRAPH 
                              ALL (edge-type :link) OUTGOING))))
